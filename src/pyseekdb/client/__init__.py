@@ -35,6 +35,7 @@ from .embedding_function import (
 from .client_seekdb_embedded import SeekdbEmbeddedClient
 from .client_seekdb_server import RemoteServerClient
 from .database import Database
+from .version import Version
 from .admin_client import AdminAPI, _AdminClientProxy, _ClientProxy
 
 logger = logging.getLogger(__name__)
@@ -55,6 +56,7 @@ __all__ = [
     'AdminAPI',
     'AdminClient',
     'Database',
+    'Version',
 ]
 
 def Client(

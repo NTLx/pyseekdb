@@ -56,6 +56,7 @@ from .client import (
     AdminAPI,
     AdminClient,
     Database,
+    Version,
 )
 from .client.collection import Collection
 
@@ -83,5 +84,6 @@ __all__ = [
     'AdminAPI',
     'AdminClient',
     'Database',
+    'Version',
 ]
 
