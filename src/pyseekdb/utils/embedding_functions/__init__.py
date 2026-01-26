@@ -35,4 +35,6 @@ __all__ = [
     "SiliconflowEmbeddingFunction",
     "TencentHunyuanEmbeddingFunction",
     "VoyageaiEmbeddingFunction",
+    "Text2VecEmbeddingFunction",
 ]
+from .text2vec_embedding_function import Text2VecEmbeddingFunction
