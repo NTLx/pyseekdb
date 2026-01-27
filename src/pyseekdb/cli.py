@@ -213,3 +213,32 @@ def collection_info(ctx, name, peek_count):
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise SystemExit(1)
+
+
+@collection.command("delete")
+@click.argument("name")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+def collection_delete(ctx, name, yes):
+    """Delete a collection.
+
+    NAME is the collection name to delete.
+
+    WARNING: This operation is irreversible!
+    """
+    console = Console()
+
+    if not yes:
+        console.print(f"[yellow]Warning:[/yellow] You are about to delete collection '[bold]{name}[/bold]'")
+        console.print("[red]This action cannot be undone![/red]")
+        if not click.confirm("Are you sure?"):
+            console.print("[dim]Aborted.[/dim]")
+            return
+
+    try:
+        with get_client(ctx) as client:
+            client.delete_collection(name)
+            console.print(f"[green]Successfully deleted collection '[bold]{name}[/bold]'[/green]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
