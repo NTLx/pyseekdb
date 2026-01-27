@@ -5,8 +5,11 @@ A CLI tool for inspecting and managing SeekDB collections.
 """
 
 import click
+from rich.console import Console
+from rich.table import Table
 
 from pyseekdb import __version__
+from pyseekdb import Client
 
 
 @click.group()
@@ -67,3 +70,71 @@ def main(ctx, host, port, user, password, database):
 
 if __name__ == "__main__":
     main()
+
+
+def get_client(ctx):
+    """Create a client from context connection info."""
+    conn = ctx.obj["connection"]
+    return Client(
+        mode="server",
+        host=conn["host"],
+        port=conn["port"],
+        user=conn["user"],
+        password=conn["password"],
+        database=conn["database"],
+    )
+
+
+@main.group()
+def collection():
+    """Manage collections."""
+    pass
+
+
+@collection.command("list")
+@click.option("--format", "output_format", type=click.Choice(["table", "json"]), default="table", help="Output format")
+@click.pass_context
+def collection_list(ctx, output_format):
+    """List all collections in the database."""
+    console = Console()
+
+    try:
+        with get_client(ctx) as client:
+            collections = client.list_collections()
+
+            if not collections:
+                console.print("[yellow]No collections found.[/yellow]")
+                return
+
+            if output_format == "json":
+                import json
+                data = []
+                for coll in collections:
+                    try:
+                        count = coll.count()
+                    except Exception:
+                        count = "N/A"
+                    data.append({
+                        "name": coll.name,
+                        "dimension": coll.dimension,
+                        "count": count,
+                    })
+                console.print(json.dumps(data, indent=2))
+            else:
+                table = Table(title="Collections")
+                table.add_column("Name", style="cyan", no_wrap=True)
+                table.add_column("Dimension", justify="right", style="green")
+                table.add_column("Count", justify="right", style="magenta")
+
+                for coll in collections:
+                    try:
+                        count = str(coll.count())
+                    except Exception:
+                        count = "N/A"
+                    table.add_row(coll.name, str(coll.dimension or "N/A"), count)
+
+                console.print(table)
+                console.print(f"\n[dim]Total: {len(collections)} collection(s)[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
