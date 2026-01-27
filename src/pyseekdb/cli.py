@@ -6,13 +6,11 @@ A CLI tool for inspecting and managing SeekDB collections.
 
 import click
 from rich.console import Console
-from rich.table import Table
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 
-from pyseekdb import __version__
-from pyseekdb import Client
-from pyseekdb import HNSWConfiguration
+from pyseekdb import Client, HNSWConfiguration, __version__
 
 
 @click.group()
@@ -71,10 +69,6 @@ def main(ctx, host, port, user, password, database):
     }
 
 
-if __name__ == "__main__":
-    main()
-
-
 def get_client(ctx):
     """Create a client from context connection info."""
     conn = ctx.obj["connection"]
@@ -86,6 +80,29 @@ def get_client(ctx):
         password=conn["password"],
         database=conn["database"],
     )
+
+
+@main.command()
+@click.pass_context
+def ping(ctx):
+    """Test database connection."""
+    console = Console()
+    conn = ctx.obj["connection"]
+
+    console.print(f"Connecting to [cyan]{conn['host']}:{conn['port']}[/cyan]...")
+
+    try:
+        with get_client(ctx) as client:
+            # Try a simple operation to verify connection
+            client.list_collections()
+            console.print("[green]Successfully connected to SeekDB![/green]")
+            console.print(f"  Host: {conn['host']}")
+            console.print(f"  Port: {conn['port']}")
+            console.print(f"  User: {conn['user']}")
+            console.print(f"  Database: {conn['database']}")
+    except Exception as e:
+        console.print(f"[red]Connection failed:[/red] {e}")
+        raise SystemExit(1) from e
 
 
 @main.group()
