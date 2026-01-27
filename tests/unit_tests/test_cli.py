@@ -168,3 +168,52 @@ class TestCollectionDeleteCommand:
             result = runner.invoke(main, ["collection", "delete", "test_coll", "--yes"])
             assert result.exit_code == 0
             mock_client.delete_collection.assert_called_once_with("test_coll")
+
+
+class TestCollectionCreateCommand:
+    """Test collection create command"""
+
+    def test_collection_create_basic(self):
+        """Test creating a collection with required args"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        mock_collection = MagicMock()
+        mock_collection.name = "new_collection"
+        mock_collection.dimension = 128
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.create_collection.return_value = mock_collection
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, [
+                "collection", "create", "new_collection",
+                "--dimension", "128"
+            ])
+            assert result.exit_code == 0
+            assert "new_collection" in result.output
+            mock_client.create_collection.assert_called_once()
+
+    def test_collection_create_with_distance(self):
+        """Test creating a collection with custom distance metric"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        mock_collection = MagicMock()
+        mock_collection.name = "cosine_collection"
+        mock_collection.dimension = 256
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.create_collection.return_value = mock_collection
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, [
+                "collection", "create", "cosine_collection",
+                "--dimension", "256",
+                "--distance", "cosine"
+            ])
+            assert result.exit_code == 0
