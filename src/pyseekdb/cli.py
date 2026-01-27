@@ -272,3 +272,23 @@ def collection_create(ctx, name, dimension, distance):
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise SystemExit(1)
+
+
+@collection.command("count")
+@click.argument("name")
+@click.pass_context
+def collection_count(ctx, name):
+    """Get the number of records in a collection.
+
+    NAME is the collection name to count.
+    """
+    console = Console()
+
+    try:
+        with get_client(ctx) as client:
+            coll = client.get_collection(name)
+            count = coll.count()
+            console.print(f"Collection '[bold cyan]{name}[/bold cyan]' has [bold green]{count}[/bold green] records.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
