@@ -2,6 +2,7 @@
 
 import pytest
 from click.testing import CliRunner
+from unittest.mock import MagicMock, patch
 
 
 class TestCLIBasics:
@@ -27,3 +28,56 @@ class TestCLIBasics:
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
         assert "0.0.1" in result.output or "version" in result.output.lower()
+
+
+class TestCollectionListCommand:
+    """Test collection list command"""
+
+    def test_collection_list_command_exists(self):
+        """Test that collection list command is registered"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+        result = runner.invoke(main, ["collection", "--help"])
+        assert result.exit_code == 0
+        assert "list" in result.output
+
+    def test_collection_list_no_collections(self):
+        """Test listing when no collections exist"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.list_collections.return_value = []
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "list"])
+            assert result.exit_code == 0
+            assert "No collections" in result.output or "0" in result.output
+
+    def test_collection_list_with_collections(self):
+        """Test listing with existing collections"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        mock_collection1 = MagicMock()
+        mock_collection1.name = "test_collection"
+        mock_collection1.dimension = 128
+        mock_collection1.count.return_value = 100
+
+        mock_collection2 = MagicMock()
+        mock_collection2.name = "another_collection"
+        mock_collection2.dimension = 256
+        mock_collection2.count.return_value = 50
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.list_collections.return_value = [mock_collection1, mock_collection2]
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "list"])
+            assert result.exit_code == 0
+            assert "test_collection" in result.output
+            assert "another_collection" in result.output
