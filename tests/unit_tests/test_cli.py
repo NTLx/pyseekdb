@@ -81,3 +81,58 @@ class TestCollectionListCommand:
             assert result.exit_code == 0
             assert "test_collection" in result.output
             assert "another_collection" in result.output
+
+
+class TestCollectionInfoCommand:
+    """Test collection info command"""
+
+    def test_collection_info_command_exists(self):
+        """Test that collection info command is registered"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+        result = runner.invoke(main, ["collection", "info", "--help"])
+        assert result.exit_code == 0
+        assert "NAME" in result.output or "name" in result.output
+
+    def test_collection_info_not_found(self):
+        """Test info for non-existent collection"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.get_collection.side_effect = ValueError("Collection not found")
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "info", "nonexistent"])
+            assert result.exit_code != 0
+
+    def test_collection_info_success(self):
+        """Test info for existing collection"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        mock_collection = MagicMock()
+        mock_collection.name = "my_collection"
+        mock_collection.dimension = 384
+        mock_collection.distance = "cosine"
+        mock_collection.count.return_value = 1000
+        mock_collection.metadata = {"created": "2026-01-01"}
+        mock_collection.peek.return_value = {
+            "ids": ["id1", "id2"],
+            "documents": ["doc1", "doc2"],
+            "metadatas": [{}, {}],
+        }
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.get_collection.return_value = mock_collection
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "info", "my_collection"])
+            assert result.exit_code == 0
+            assert "my_collection" in result.output
+            assert "384" in result.output
+            assert "1000" in result.output

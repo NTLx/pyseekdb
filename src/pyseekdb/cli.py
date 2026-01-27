@@ -7,6 +7,8 @@ A CLI tool for inspecting and managing SeekDB collections.
 import click
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
 
 from pyseekdb import __version__
 from pyseekdb import Client
@@ -135,6 +137,79 @@ def collection_list(ctx, output_format):
 
                 console.print(table)
                 console.print(f"\n[dim]Total: {len(collections)} collection(s)[/dim]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
+
+
+@collection.command("info")
+@click.argument("name")
+@click.option("--peek", "peek_count", default=0, type=int, help="Preview N records (default: 0)")
+@click.pass_context
+def collection_info(ctx, name, peek_count):
+    """Show detailed information about a collection.
+
+    NAME is the collection name to inspect.
+    """
+    console = Console()
+
+    try:
+        with get_client(ctx) as client:
+            try:
+                coll = client.get_collection(name)
+            except Exception as e:
+                console.print(f"[red]Error:[/red] Collection '{name}' not found: {e}")
+                raise SystemExit(1)
+
+            # Build info display
+            info_text = Text()
+            info_text.append("Name: ", style="bold")
+            info_text.append(f"{coll.name}\n", style="cyan")
+            info_text.append("Dimension: ", style="bold")
+            info_text.append(f"{coll.dimension or 'N/A'}\n", style="green")
+            info_text.append("Distance: ", style="bold")
+            info_text.append(f"{coll.distance or 'N/A'}\n", style="yellow")
+
+            try:
+                count = coll.count()
+                info_text.append("Count: ", style="bold")
+                info_text.append(f"{count}\n", style="magenta")
+            except Exception:
+                info_text.append("Count: ", style="bold")
+                info_text.append("N/A\n", style="dim")
+
+            if coll.metadata:
+                info_text.append("Metadata: ", style="bold")
+                info_text.append(f"{coll.metadata}\n", style="dim")
+
+            console.print(Panel(info_text, title=f"Collection: {name}", border_style="blue"))
+
+            # Peek records if requested
+            if peek_count > 0:
+                console.print(f"\n[bold]Sample Records (first {peek_count}):[/bold]")
+                try:
+                    records = coll.peek(limit=peek_count)
+                    if records.get("ids"):
+                        table = Table()
+                        table.add_column("ID", style="cyan")
+                        table.add_column("Document", style="white", max_width=50)
+                        table.add_column("Metadata", style="dim")
+
+                        for i, id_ in enumerate(records["ids"]):
+                            doc = records.get("documents", ["N/A"] * len(records["ids"]))[i]
+                            meta = records.get("metadatas", [{}] * len(records["ids"]))[i]
+                            # Truncate long documents
+                            if doc and len(doc) > 50:
+                                doc = doc[:47] + "..."
+                            table.add_row(str(id_), str(doc), str(meta))
+
+                        console.print(table)
+                    else:
+                        console.print("[yellow]No records found.[/yellow]")
+                except Exception as e:
+                    console.print(f"[red]Error peeking records:[/red] {e}")
+    except SystemExit:
+        raise
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise SystemExit(1)
