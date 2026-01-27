@@ -239,3 +239,36 @@ class TestCollectionCountCommand:
             result = runner.invoke(main, ["collection", "count", "my_collection"])
             assert result.exit_code == 0
             assert "42" in result.output
+
+
+class TestPingCommand:
+    """Test ping command for connection testing"""
+
+    def test_ping_success(self):
+        """Test successful connection"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.list_collections.return_value = []
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["ping"])
+            assert result.exit_code == 0
+            assert "success" in result.output.lower() or "connected" in result.output.lower()
+
+    def test_ping_failure(self):
+        """Test failed connection"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client_class.return_value.__enter__ = MagicMock(
+                side_effect=Exception("Connection refused")
+            )
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["ping"])
+            assert result.exit_code != 0
