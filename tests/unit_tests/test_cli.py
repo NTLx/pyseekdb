@@ -217,3 +217,25 @@ class TestCollectionCreateCommand:
                 "--distance", "cosine"
             ])
             assert result.exit_code == 0
+
+
+class TestCollectionCountCommand:
+    """Test collection count command"""
+
+    def test_collection_count_success(self):
+        """Test counting records in a collection"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        mock_collection = MagicMock()
+        mock_collection.count.return_value = 42
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client.get_collection.return_value = mock_collection
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "count", "my_collection"])
+            assert result.exit_code == 0
+            assert "42" in result.output
