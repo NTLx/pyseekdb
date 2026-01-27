@@ -12,6 +12,7 @@ from rich.text import Text
 
 from pyseekdb import __version__
 from pyseekdb import Client
+from pyseekdb import HNSWConfiguration
 
 
 @click.group()
@@ -239,6 +240,35 @@ def collection_delete(ctx, name, yes):
         with get_client(ctx) as client:
             client.delete_collection(name)
             console.print(f"[green]Successfully deleted collection '[bold]{name}[/bold]'[/green]")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        raise SystemExit(1)
+
+
+@collection.command("create")
+@click.argument("name")
+@click.option("--dimension", "-d", type=int, required=True, help="Vector dimension (required)")
+@click.option(
+    "--distance",
+    type=click.Choice(["l2", "cosine", "inner_product"]),
+    default="l2",
+    help="Distance metric (default: l2)",
+)
+@click.pass_context
+def collection_create(ctx, name, dimension, distance):
+    """Create a new collection.
+
+    NAME is the collection name to create.
+    """
+    console = Console()
+
+    try:
+        with get_client(ctx) as client:
+            config = HNSWConfiguration(dimension=dimension, distance=distance)
+            coll = client.create_collection(name, configuration=config)
+            console.print(f"[green]Successfully created collection '[bold]{coll.name}[/bold]'[/green]")
+            console.print(f"  Dimension: {dimension}")
+            console.print(f"  Distance: {distance}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         raise SystemExit(1)
