@@ -18,12 +18,17 @@ dependencies = [
     "tqdm",
     "tenacity",
     "numpy>=1.26",
+    "click>=8.1.0",
+    "rich>=13.0.0",
 ]
 
 [project.urls]
 Homepage = "https://github.com/oceanbase/pyseekdb/"
 Repository = "https://github.com/oceanbase/pyseekdb/"
 "Bug Tracker" = "https://github.com/oceanbase/pyseekdb/issues"
+
+[project.scripts]
+seekdb = "pyseekdb.cli:main"
 
 [dependency-groups]
 dev = [
