@@ -136,3 +136,35 @@ class TestCollectionInfoCommand:
             assert "my_collection" in result.output
             assert "384" in result.output
             assert "1000" in result.output
+
+
+class TestCollectionDeleteCommand:
+    """Test collection delete command"""
+
+    def test_collection_delete_requires_confirmation(self):
+        """Test that delete requires --yes flag or confirmation"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            # Without --yes, should prompt (input 'n' to abort)
+            result = runner.invoke(main, ["collection", "delete", "test_coll"], input="n\n")
+            assert mock_client.delete_collection.call_count == 0
+
+    def test_collection_delete_with_yes_flag(self):
+        """Test that delete with --yes skips confirmation"""
+        from pyseekdb.cli import main
+        runner = CliRunner()
+
+        with patch("pyseekdb.cli.Client") as mock_client_class:
+            mock_client = MagicMock()
+            mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
+            mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = runner.invoke(main, ["collection", "delete", "test_coll", "--yes"])
+            assert result.exit_code == 0
+            mock_client.delete_collection.assert_called_once_with("test_coll")
