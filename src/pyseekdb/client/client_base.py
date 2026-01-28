@@ -2017,12 +2017,13 @@ class BaseClient(BaseConnection, AdminAPI):
             finally:
                 cursor.close()
 
-    def _build_select_clause(self, include_fields: dict[str, bool]) -> str:
+    def _build_select_clause(self, include_fields: dict[str, bool], _source: dict[str, Any] | None = None) -> str:
         """
-        Build SELECT clause based on include fields
+        Build SELECT clause based on include fields and _source projection
 
         Args:
             include_fields: Dictionary of fields to include
+            _source: Dictionary for metadata field selection (includes/excludes)
 
         Returns:
             SELECT clause string
@@ -2032,10 +2033,36 @@ class BaseClient(BaseConnection, AdminAPI):
             select_fields.append("embedding")
         if include_fields.get("documents") or include_fields.get("document"):
             select_fields.append("document")
+
         if include_fields.get("metadatas") or include_fields.get("metadata"):
-            select_fields.append("metadata")
+            if _source:
+                metadata_expr = self._build_metadata_projection(_source)
+                select_fields.append(f"{metadata_expr} AS metadata")
+            else:
+                select_fields.append("metadata")
 
         return ", ".join(select_fields)
+
+    def _build_metadata_projection(self, _source: dict[str, Any]) -> str:
+        """
+        Build SQL expression for metadata projection using JSON functions
+        """
+        includes = _source.get("includes")
+        excludes = _source.get("excludes")
+
+        if includes:
+            # SELECT JSON_OBJECT('key1', JSON_EXTRACT(metadata, '$.key1'), ...)
+            kv_pairs = []
+            for field in includes:
+                kv_pairs.append(f"'{field}', JSON_EXTRACT(metadata, '$.{field}')")
+            return f"JSON_OBJECT({', '.join(kv_pairs)})"
+
+        if excludes:
+            # SELECT JSON_REMOVE(metadata, '$.key1', '$.key2', ...)
+            paths = [f"'$.{field}'" for field in excludes]
+            return f"JSON_REMOVE(metadata, {', '.join(paths)})"
+
+        return "metadata"
 
     def _build_where_clause(
         self,
@@ -2275,6 +2302,7 @@ class BaseClient(BaseConnection, AdminAPI):
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -2289,6 +2317,7 @@ class BaseClient(BaseConnection, AdminAPI):
             where: Metadata filter
             where_document: Document filter
             include: Fields to include
+            _source: Metadata field selection
             **kwargs: Additional parameters, including:
                 embedding_function: EmbeddingFunction instance to convert query_texts to embeddings.
                                    Required if query_texts is provided and collection doesn't have
@@ -2354,7 +2383,7 @@ class BaseClient(BaseConnection, AdminAPI):
         include_fields = self._normalize_include_fields(include)
 
         # Build SELECT clause
-        select_clause = self._build_select_clause(include_fields)
+        select_clause = self._build_select_clause(include_fields, _source=_source)
 
         # Build WHERE clause from filters
         where_clause, params = self._build_where_clause(where, where_document)
@@ -2467,6 +2496,7 @@ class BaseClient(BaseConnection, AdminAPI):
         limit: int | None = None,
         offset: int | None = None,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -2481,6 +2511,7 @@ class BaseClient(BaseConnection, AdminAPI):
             limit: Maximum number of results (optional)
             offset: Number of results to skip (optional)
             include: Fields to include in results (optional)
+            _source: Metadata field selection
             **kwargs: Additional parameters
 
         Returns:
@@ -2515,7 +2546,7 @@ class BaseClient(BaseConnection, AdminAPI):
         include_fields = self._normalize_include_fields(include)
 
         # Build SELECT clause - always include _id
-        select_clause = self._build_select_clause(include_fields)
+        select_clause = self._build_select_clause(include_fields, _source=_source)
 
         use_context_manager = self._use_context_manager_for_cursor()
 
@@ -2580,6 +2611,7 @@ class BaseClient(BaseConnection, AdminAPI):
         rank: dict[str, Any] | None = None,
         n_results: int = 10,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         dimension: int | None = None,
         **kwargs,
     ) -> dict[str, Any]:
@@ -2608,6 +2640,7 @@ class BaseClient(BaseConnection, AdminAPI):
             rank: Ranking configuration dict (e.g., {"rrf": {"rank_window_size": 60, "rank_constant": 60}})
             n_results: Final number of results to return after ranking (default: 10)
             include: Fields to include in results (optional)
+            _source: Metadata field selection
             dimension: Collection vector dimension for validating query_embeddings (optional)
             **kwargs: Additional parameters, including:
                 embedding_function: EmbeddingFunction instance to convert query_texts in knn to embeddings.
@@ -2671,6 +2704,20 @@ class BaseClient(BaseConnection, AdminAPI):
         if isinstance(query_sql, str):
             # Remove any surrounding quotes if present
             query_sql = query_sql.strip().strip("'\"")
+
+        # Inject _source projection if provided
+        if _source:
+            include_fields = self._normalize_include_fields(include)
+            select_clause = self._build_select_clause(include_fields, _source=_source)
+            # Replace SELECT * with specific projection
+            # Note: DBMS_HYBRID_SEARCH usually generates SELECT * FROM ...
+            if query_sql.upper().startswith("SELECT *"):
+                query_sql = query_sql.replace("SELECT *", f"SELECT {select_clause}", 1)
+            elif query_sql.upper().startswith("SELECT"):
+                # Handle cases where it might not be SELECT *
+                # This is a bit risky but we try to replace the first SELECT part
+                # For safety, we only replace if we are sure it matches our expectation
+                pass
 
         logger.debug(f"Executing query SQL: {query_sql}")
 

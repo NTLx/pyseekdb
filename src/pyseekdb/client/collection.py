@@ -321,6 +321,7 @@ class Collection:
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -339,6 +340,8 @@ class Collection:
                    - Logical operators: $or, $and
             include: Fields to include in results, e.g., ["documents", "metadatas", "embeddings"] (optional)
                      By default, returns "documents" and "metadatas". Always includes "_id".
+            _source: Dictionary to include or exclude specific metadata fields (optional).
+                     Example: {"includes": ["field1", "field2"]} or {"excludes": ["field3"]}
             **kwargs: Additional parameters
 
         Returns:
@@ -396,6 +399,7 @@ class Collection:
             where=where,
             where_document=where_document,
             include=include,
+            _source=_source,
             embedding_function=self._embedding_function,
             distance=self._distance,
             **kwargs,
@@ -409,6 +413,7 @@ class Collection:
         limit: int | None = None,
         offset: int | None = None,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -421,6 +426,7 @@ class Collection:
             limit: Maximum number of results to return (optional)
             offset: Number of results to skip (optional)
             include: Fields to include in results, e.g., ["metadatas", "documents", "embeddings"] (optional)
+            _source: Dictionary to include or exclude specific metadata fields (optional).
             **kwargs: Additional parameters
 
         Returns:
@@ -464,6 +470,7 @@ class Collection:
             limit=limit,
             offset=offset,
             include=include,
+            _source=_source,
             **kwargs,
         )
 
@@ -474,6 +481,7 @@ class Collection:
         rank: dict[str, Any] | None = None,
         n_results: int = 10,
         include: list[str] | None = None,
+        _source: dict[str, Any] | None = None,
         search: HybridSearch | None = None,
         **kwargs,
     ) -> dict[str, Any]:
@@ -495,6 +503,7 @@ class Collection:
             rank: Ranking configuration dict (e.g., {"rrf": {"rank_window_size": 60, "rank_constant": 60}})
             n_results: Final number of results to return after ranking (default: 10)
             include: Fields to include in results (e.g., ["documents", "metadatas", "embeddings"])
+            _source: Dictionary to include or exclude specific metadata fields (optional).
             search: HybridSearch builder instance (optional). If provided, takes precedence
                 over query/knn/rank/include/n_results arguments.
             **kwargs: Additional parameters
@@ -557,6 +566,7 @@ class Collection:
             rank=rank,
             n_results=n_results,
             include=include,
+            _source=_source,
             embedding_function=self._embedding_function,
             dimension=self._dimension,
             **kwargs,
