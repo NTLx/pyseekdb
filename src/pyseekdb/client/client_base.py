@@ -37,6 +37,7 @@ from .embedding_function import (
 from .filters import FilterBuilder
 from .meta_info import CollectionFieldNames, CollectionNames
 from .sql_utils import is_query_sql
+from .utils import unflatten_dict
 from .version import Version
 
 # Type alias for embedding_function parameter that can be EmbeddingFunction, None, or sentinel
@@ -2017,25 +2018,70 @@ class BaseClient(BaseConnection, AdminAPI):
             finally:
                 cursor.close()
 
-    def _build_select_clause(self, include_fields: dict[str, bool]) -> str:
+    def _build_projection_sql(self, _source: list[str] | None, include_fields: dict[str, bool]) -> str:
         """
-        Build SELECT clause based on include fields
-
-        Args:
-            include_fields: Dictionary of fields to include
-
-        Returns:
-            SELECT clause string
+        Build SQL projection clause based on _source and include parameters.
+        Returns a comma-separated string of columns to select (excluding _id which is always selected).
         """
-        select_fields = ["_id"]
-        if include_fields.get("embeddings") or include_fields.get("embedding"):
-            select_fields.append("embedding")
-        if include_fields.get("documents") or include_fields.get("document"):
-            select_fields.append("document")
-        if include_fields.get("metadatas") or include_fields.get("metadata"):
-            select_fields.append("metadata")
+        columns = []
 
-        return ", ".join(select_fields)
+        # 1. Handle document
+        # If _source explicitly requests 'document', or if include says yes and _source doesn't exclude it
+        # (For simplicity, if _source is present, we follow it for metadata, but for core fields we respect both)
+        if _source is not None:
+            if "document" in _source:
+                columns.append("document")
+        elif include_fields.get("documents") or include_fields.get("document"):
+            columns.append("document")
+
+        # 2. Handle embedding
+        if _source is not None:
+            if "vector" in _source:
+                columns.append("vector as embedding")
+        elif include_fields.get("embeddings") or include_fields.get("embedding"):
+            columns.append("vector as embedding")
+
+        # 3. Handle metadata
+        if _source is None:
+            # Default behavior: full metadata if requested
+            if include_fields.get("metadatas") or include_fields.get("metadata"):
+                columns.append("metadata")
+        else:
+            # Source selection mode
+            # Check if full metadata is requested
+            if "metadata" in _source:
+                columns.append("metadata")
+            else:
+                # Partial metadata extraction
+                # e.g., metadata.author -> JSON_EXTRACT(metadata, '$.author') AS `metadata.author`
+                for field in _source:
+                    if field.startswith("metadata.") and len(field) > 9:
+                        json_path = field[9:]  # remove "metadata." prefix
+                        # Basic SQL injection prevention: allow only alphanumeric, underscore, dot
+                        if not re.match(r"^[a-zA-Z0-9_\.]+$", json_path):
+                            logger.warning(f"Skipping invalid json path: {json_path}")
+                            continue
+
+                        # Use JSON_EXTRACT
+                        # Note: We use AS "metadata.xxx" to preserve the path for unflattening
+                        columns.append(f"JSON_EXTRACT(metadata, '$.{json_path}') AS `metadata.{json_path}`")
+
+        return ", ".join(columns) if columns else ""
+
+    def _build_select_clause(self, include_fields: dict[str, bool], _source: list[str] | None = None) -> str:
+        """
+        Build SELECT clause
+        Always includes _id
+        """
+        # Always select _id
+        columns = ["id as _id"]
+
+        # Add other columns based on projection
+        projection = self._build_projection_sql(_source, include_fields)
+        if projection:
+            columns.append(projection)
+
+        return ", ".join(columns)
 
     def _build_where_clause(
         self,
@@ -2212,8 +2258,26 @@ class BaseClient(BaseConnection, AdminAPI):
             document = row["document"]
 
         # Include metadata if requested
+        # Check for full metadata object
         if (include_fields.get("metadatas") or include_fields.get("metadata")) and row.get("metadata") is not None:
             metadata = self._parse_row_value(row["metadata"])
+
+        # Check for partial/nested metadata fields (projected fields)
+        # Scan for keys starting with "metadata."
+        projected_metadata = {}
+        has_projected = False
+        for k, v in row.items():
+            if k.startswith("metadata."):
+                projected_metadata[k] = self._parse_row_value(v)
+                has_projected = True
+
+        if has_projected:
+            if metadata is None:
+                metadata = {}
+            # Unflatten and merge
+            nested = unflatten_dict(projected_metadata)
+            if "metadata" in nested and isinstance(nested["metadata"], dict):
+                metadata.update(nested["metadata"])
 
         # Include embedding if requested
         if (include_fields.get("embeddings") or include_fields.get("embedding")) and row.get("embedding") is not None:
