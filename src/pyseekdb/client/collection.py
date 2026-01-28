@@ -390,6 +390,10 @@ class Collection:
                 n_results=10
             )
         """
+        # Validate _source parameter type
+        if _source is not None and not isinstance(_source, list):
+            raise TypeError(f"_source must be a list of strings or None, got {type(_source).__name__}")
+
         return self._client._collection_query(
             collection_id=self._id,
             collection_name=self._name,
@@ -462,6 +466,10 @@ class Collection:
             # Get all data
             results = collection.get(limit=100)
         """
+        # Validate _source parameter type
+        if _source is not None and not isinstance(_source, list):
+            raise TypeError(f"_source must be a list of strings or None, got {type(_source).__name__}")
+
         return self._client._collection_get(
             collection_id=self._id,
             collection_name=self._name,
@@ -545,6 +553,10 @@ class Collection:
         if isinstance(query, HybridSearch):
             search = query
             query = None
+
+        # Validate _source parameter type
+        if _source is not None and not isinstance(_source, list):
+            raise TypeError(f"_source must be a list of strings or None, got {type(_source).__name__}")
 
         if isinstance(search, HybridSearch):
             params = search.to_params(dimension=self._dimension)

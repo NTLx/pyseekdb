@@ -2018,28 +2018,47 @@ class BaseClient(BaseConnection, AdminAPI):
             finally:
                 cursor.close()
 
-    def _build_projection_sql(self, _source: list[str] | None, include_fields: dict[str, bool]) -> str:
+    def _build_projection_sql(
+        self, _source: list[str] | None, include_fields: dict[str, bool], include: list[str] | None = None
+    ) -> str:
         """
         Build SQL projection clause based on _source and include parameters.
         Returns a comma-separated string of columns to select (excluding _id which is always selected).
+
+        Logic:
+        - If _source is None: use include_fields (backward compatible)
+        - If _source is provided and include is None: use _source as whitelist (ignore default include_fields)
+        - If _source is provided and include has value: merge _source with include (additive)
         """
         columns = []
 
+        # Determine if we should respect include_fields default values
+        # Only ignore defaults when _source exists and include was not explicitly provided
+        use_source_as_whitelist = _source is not None and include is None
+
         # 1. Handle document
-        # If _source explicitly requests 'document', or if include says yes and _source doesn't exclude it
-        # (For simplicity, if _source is present, we follow it for metadata, but for core fields we respect both)
-        if _source is not None:
-            if "document" in _source:
-                columns.append("document")
-        elif include_fields.get("documents") or include_fields.get("document"):
+        # Include document if: (1) explicitly in _source, OR (2) in include (user-provided or default)
+        should_include_document = False
+        if _source is not None and "document" in _source:
+            should_include_document = True
+        # Only check include_fields if not in whitelist mode, or if include was explicitly provided
+        if not use_source_as_whitelist and (include_fields.get("documents") or include_fields.get("document")):
+            should_include_document = True
+
+        if should_include_document:
             columns.append("document")
 
         # 2. Handle embedding
-        if _source is not None:
-            if "vector" in _source:
-                columns.append("vector as embedding")
-        elif include_fields.get("embeddings") or include_fields.get("embedding"):
-            columns.append("vector as embedding")
+        # Note: Database column is named 'embedding', but user may request it as 'vector' or 'embedding'
+        should_include_embedding = False
+        if _source is not None and ("vector" in _source or "embedding" in _source):
+            should_include_embedding = True
+        # Only check include_fields if not in whitelist mode, or if include was explicitly provided
+        if not use_source_as_whitelist and (include_fields.get("embeddings") or include_fields.get("embedding")):
+            should_include_embedding = True
+
+        if should_include_embedding:
+            columns.append("embedding")
 
         # 3. Handle metadata
         if _source is None:
@@ -2048,36 +2067,41 @@ class BaseClient(BaseConnection, AdminAPI):
                 columns.append("metadata")
         else:
             # Source selection mode
-            # Check if full metadata is requested
+            # Check if full metadata is requested in _source
             if "metadata" in _source:
                 columns.append("metadata")
-            else:
-                # Partial metadata extraction
-                # e.g., metadata.author -> JSON_EXTRACT(metadata, '$.author') AS `metadata.author`
-                for field in _source:
-                    if field.startswith("metadata.") and len(field) > 9:
-                        json_path = field[9:]  # remove "metadata." prefix
-                        # Basic SQL injection prevention: allow only alphanumeric, underscore, dot
-                        if not re.match(r"^[a-zA-Z0-9_\.]+$", json_path):
-                            logger.warning(f"Skipping invalid json path: {json_path}")
-                            continue
+            # Also check if full metadata is requested in include (when explicitly provided)
+            elif not use_source_as_whitelist and (include_fields.get("metadatas") or include_fields.get("metadata")):
+                columns.append("metadata")
 
-                        # Use JSON_EXTRACT
-                        # Note: We use AS "metadata.xxx" to preserve the path for unflattening
-                        columns.append(f"JSON_EXTRACT(metadata, '$.{json_path}') AS `metadata.{json_path}`")
+            # Partial metadata extraction (dot notation)
+            # e.g., metadata.author -> JSON_EXTRACT(metadata, '$.author') AS `metadata.author`
+            for field in _source:
+                if field.startswith("metadata.") and len(field) > 9:
+                    json_path = field[9:]  # remove "metadata." prefix
+                    # Basic SQL injection prevention: allow only alphanumeric, underscore, dot
+                    if not re.match(r"^[a-zA-Z0-9_\.]+$", json_path):
+                        logger.warning(f"Skipping invalid json path: {json_path}")
+                        continue
+
+                    # Use JSON_EXTRACT
+                    # Note: We use AS "metadata.xxx" to preserve the path for unflattening
+                    columns.append(f"JSON_EXTRACT(metadata, '$.{json_path}') AS `metadata.{json_path}`")
 
         return ", ".join(columns) if columns else ""
 
-    def _build_select_clause(self, include_fields: dict[str, bool], _source: list[str] | None = None) -> str:
+    def _build_select_clause(
+        self, include_fields: dict[str, bool], _source: list[str] | None = None, include: list[str] | None = None
+    ) -> str:
         """
         Build SELECT clause
         Always includes _id
         """
-        # Always select _id
-        columns = ["id as _id"]
+        # Always select _id (database column is named '_id', not 'id')
+        columns = ["_id"]
 
         # Add other columns based on projection
-        projection = self._build_projection_sql(_source, include_fields)
+        projection = self._build_projection_sql(_source, include_fields, include)
         if projection:
             columns.append(projection)
 
@@ -2227,8 +2251,30 @@ class BaseClient(BaseConnection, AdminAPI):
         if "embedding" in row and row["embedding"] is not None:
             result_item["embedding"] = self._parse_row_value(row["embedding"])
 
+        # Handle metadata - check for both full metadata and projected fields
+        metadata = None
         if "metadata" in row and row["metadata"] is not None:
-            result_item["metadata"] = self._parse_row_value(row["metadata"])
+            metadata = self._parse_row_value(row["metadata"])
+
+        # Check for partial/nested metadata fields (projected fields)
+        # Scan for keys starting with "metadata."
+        projected_metadata = {}
+        has_projected = False
+        for k, v in row.items():
+            if k.startswith("metadata."):
+                projected_metadata[k] = self._parse_row_value(v)
+                has_projected = True
+
+        if has_projected:
+            if metadata is None:
+                metadata = {}
+            # Unflatten and merge
+            nested = unflatten_dict(projected_metadata)
+            if "metadata" in nested and isinstance(nested["metadata"], dict):
+                metadata.update(nested["metadata"])
+
+        if metadata is not None:
+            result_item["metadata"] = metadata
 
         if "distance" in row:
             result_item["distance"] = float(row["distance"])
@@ -2339,6 +2385,7 @@ class BaseClient(BaseConnection, AdminAPI):
         where: dict[str, Any] | None = None,
         where_document: dict[str, Any] | None = None,
         include: list[str] | None = None,
+        _source: list[str] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -2418,7 +2465,7 @@ class BaseClient(BaseConnection, AdminAPI):
         include_fields = self._normalize_include_fields(include)
 
         # Build SELECT clause
-        select_clause = self._build_select_clause(include_fields)
+        select_clause = self._build_select_clause(include_fields, _source, include)
 
         # Build WHERE clause from filters
         where_clause, params = self._build_where_clause(where, where_document)
@@ -2531,6 +2578,7 @@ class BaseClient(BaseConnection, AdminAPI):
         limit: int | None = None,
         offset: int | None = None,
         include: list[str] | None = None,
+        _source: list[str] | None = None,
         **kwargs,
     ) -> dict[str, Any]:
         """
@@ -2579,7 +2627,7 @@ class BaseClient(BaseConnection, AdminAPI):
         include_fields = self._normalize_include_fields(include)
 
         # Build SELECT clause - always include _id
-        select_clause = self._build_select_clause(include_fields)
+        select_clause = self._build_select_clause(include_fields, _source, include)
 
         use_context_manager = self._use_context_manager_for_cursor()
 
@@ -2608,28 +2656,77 @@ class BaseClient(BaseConnection, AdminAPI):
         result_embeddings = []
 
         for row in rows:
-            processed_row = self._process_get_row(row, include_fields)
+            # Temporarily extend include_fields to include fields from _source
+            # This ensures _process_get_row correctly processes fields requested in _source
+            temp_include_fields = include_fields.copy()
+            if _source is not None:
+                if "document" in _source:
+                    temp_include_fields["documents"] = True
+                if "vector" in _source or "embedding" in _source:
+                    temp_include_fields["embeddings"] = True
+                if "metadata" in _source or any(f.startswith("metadata.") for f in _source):
+                    temp_include_fields["metadatas"] = True
+
+            processed_row = self._process_get_row(row, temp_include_fields)
             result_ids.append(processed_row["id"])
 
+            # Determine which fields to include in result based on _source and include
+            # For document: include if in _source OR in include_fields OR include is None (default)
+            should_have_document = False
+            if _source is not None and "document" in _source:
+                should_have_document = True
             if "documents" in include_fields or include is None:
+                should_have_document = True
+            if should_have_document:
                 result_documents.append(processed_row["document"])
 
+            # For metadata: include if in _source (any metadata field) OR in include_fields OR include is None (default)
+            should_have_metadata = False
+            if _source is not None:
+                # Check if any metadata field is requested in _source
+                if "metadata" in _source or any(f.startswith("metadata.") for f in _source):
+                    should_have_metadata = True
             if "metadatas" in include_fields or include is None:
+                should_have_metadata = True
+            if should_have_metadata:
                 result_metadatas.append(processed_row["metadata"] or {})
 
+            # For embeddings: include if in _source (as "vector" or "embedding") OR in include_fields
+            should_have_embedding = False
+            if _source is not None and ("vector" in _source or "embedding" in _source):
+                should_have_embedding = True
             if "embeddings" in include_fields:
+                should_have_embedding = True
+            if should_have_embedding:
                 result_embeddings.append(processed_row["embedding"])
 
         # Build result dictionary
         result = {"ids": result_ids}
 
+        # Include fields in result based on same logic
+        should_have_document = False
+        if _source is not None and "document" in _source:
+            should_have_document = True
         if "documents" in include_fields or include is None:
+            should_have_document = True
+        if should_have_document:
             result["documents"] = result_documents
 
+        should_have_metadata = False
+        if _source is not None:
+            if "metadata" in _source or any(f.startswith("metadata.") for f in _source):
+                should_have_metadata = True
         if "metadatas" in include_fields or include is None:
+            should_have_metadata = True
+        if should_have_metadata:
             result["metadatas"] = result_metadatas
 
+        should_have_embedding = False
+        if _source is not None and ("vector" in _source or "embedding" in _source):
+            should_have_embedding = True
         if "embeddings" in include_fields:
+            should_have_embedding = True
+        if should_have_embedding:
             result["embeddings"] = result_embeddings
 
         logger.debug(f"✅ Get completed for '{collection_name}', found {len(result_ids)} results")
