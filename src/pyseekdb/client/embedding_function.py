@@ -139,43 +139,41 @@ def dimension_of(embedding_function: EmbeddingFunction[D]) -> int:
             raise ValueError("Embedding function returned empty result when called with 'seekdb'")
 
 
-class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
+class ONNXEmbeddingFunction(EmbeddingFunction[Documents]):
     """
-    Default embedding function using ONNX runtime.
-
-    Uses the 'all-MiniLM-L6-v2' model via ONNX, which produces 384-dimensional embeddings.
-    This is a lightweight, fast model suitable for general-purpose text embeddings.
-
-    Example:
-        >>> ef = DefaultEmbeddingFunction()
-        >>> embeddings = ef(["Hello world", "How are you?"])
-        >>> print(len(embeddings[0]))  # 384
+    Base class for ONNX-based embedding functions.
+    Handles model downloading, initialization, and inference using ONNX runtime.
     """
 
-    MODEL_NAME = "all-MiniLM-L6-v2"
-    HF_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"  # Hugging Face model ID
-    DOWNLOAD_PATH = Path.home() / ".cache" / "pyseekdb" / "onnx_models" / MODEL_NAME
     EXTRACTED_FOLDER_NAME = "onnx"
     ARCHIVE_FILENAME = "onnx.tar.gz"
-    _DIMENSION = 384  # all-MiniLM-L6-v2 produces 384-dimensional embeddings
 
     def __init__(
         self,
-        model_name: str = "all-MiniLM-L6-v2",
+        model_name: str,
+        hf_model_id: str,
+        dimension: int,
+        download_path: Path | None = None,
         preferred_providers: list[str] | None = None,
     ):
         """
-        Initialize the default embedding function.
+        Initialize the ONNX embedding function.
 
         Args:
-            model_name: Name of the model (currently only 'all-MiniLM-L6-v2' is supported).
-                       Default is 'all-MiniLM-L6-v2' (384 dimensions).
-            preferred_providers: The preferred ONNX runtime providers.
-                                Defaults to None (uses available providers).
+            model_name: Local identifier for the model.
+            hf_model_id: Hugging Face model ID (e.g. 'sentence-transformers/all-MiniLM-L6-v2').
+            dimension: Dimension of the embeddings produced by the model.
+            download_path: Custom path to download models. If None, defaults to ~/.cache/pyseekdb/onnx_models/<model_name>.
+            preferred_providers: List of preferred ONNX runtime providers.
         """
-        if model_name != "all-MiniLM-L6-v2":
-            raise ValueError(f"Currently only 'all-MiniLM-L6-v2' is supported, got '{model_name}'")
         self.model_name = model_name
+        self.hf_model_id = hf_model_id
+        self._dimension = dimension
+
+        if download_path:
+            self.download_path = Path(download_path)
+        else:
+            self.download_path = Path.home() / ".cache" / "pyseekdb" / "onnx_models" / model_name
 
         # Validate preferred_providers
         if preferred_providers and not all(isinstance(i, str) for i in preferred_providers):
@@ -197,16 +195,11 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
     @property
     def dimension(self) -> int:
         """Get the dimension of embeddings produced by this function"""
-        return self._DIMENSION
+        return self._dimension
 
     def _download(self, url: str, fname: str, chunk_size: int = 8192) -> None:
         """
         Download a file from the URL and save it to the file path.
-
-        Args:
-            url: The URL to download the file from.
-            fname: The path to save the file to.
-            chunk_size: The chunk size to use when downloading (default: 8192 for better speed).
         """
         logger.info(f"Downloading from {url}")
         # Use Client to ensure correct handling of redirects
@@ -234,9 +227,6 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
     def _download_from_huggingface(self) -> bool:  # noqa: C901
         """
         Download model files from Hugging Face (supports mirror acceleration).
-
-        Returns:
-            True if download successful, False otherwise.
         """
         try:
             hf_endpoint = self._get_hf_endpoint()
@@ -254,7 +244,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
                 "vocab.txt": "vocab.txt",
             }
 
-            extracted_folder = os.path.join(self.DOWNLOAD_PATH, self.EXTRACTED_FOLDER_NAME)
+            extracted_folder = os.path.join(self.download_path, self.EXTRACTED_FOLDER_NAME)
             os.makedirs(extracted_folder, exist_ok=True)
 
             logger.info(f"Downloading model from Hugging Face (endpoint: {hf_endpoint})")
@@ -268,9 +258,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
                     continue
 
                 # Construct Hugging Face download URL
-                # Format: https://hf-mirror.com/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx
-                # Or: https://hf-mirror.com/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json
-                url = f"{hf_endpoint}/{self.HF_MODEL_ID}/resolve/main/{hf_filename}"
+                url = f"{hf_endpoint}/{self.hf_model_id}/resolve/main/{hf_filename}"
 
                 try:
                     # First check if file exists (HEAD request)
@@ -315,13 +303,6 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
     def _forward(self, documents: list[str], batch_size: int = 32) -> npt.NDArray[np.float32]:
         """
         Generate embeddings for a list of documents.
-
-        Args:
-            documents: The documents to generate embeddings for.
-            batch_size: The batch size to use when generating embeddings.
-
-        Returns:
-            The embeddings for the documents.
         """
         all_embeddings = []
         for i in range(0, len(documents), batch_size):
@@ -337,8 +318,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
                         f"Document length {len(doc_tokens.ids)} is greater than the max tokens {self.max_tokens()}"
                     )
 
-            # Create input arrays exactly like the working standalone script
-            # Create input arrays, ensuring int64 type
+            # Create input arrays
             input_ids = np.array([e.ids for e in encoded], dtype=np.int64)
             attention_mask = np.array([e.attention_mask for e in encoded], dtype=np.int64)
 
@@ -351,7 +331,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
             # Use zeros_like to create token_type_ids, ensuring exact shape match
             token_type_ids = np.zeros_like(input_ids, dtype=np.int64)
 
-            # Ensure all arrays are contiguous, which is important for onnxruntime 1.19.0
+            # Ensure all arrays are contiguous
             input_ids = np.ascontiguousarray(input_ids, dtype=np.int64)
             attention_mask = np.ascontiguousarray(attention_mask, dtype=np.int64)
             token_type_ids = np.ascontiguousarray(token_type_ids, dtype=np.int64)
@@ -365,8 +345,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
             model_output = self.model.run(None, onnx_input)
             last_hidden_state = model_output[0]
 
-            # Mean pooling (exactly as in the code)
-            # Note: attention_mask needs to be converted to float type for floating point operations
+            # Mean pooling
             attention_mask_float = attention_mask.astype(np.float32)
             input_mask_expanded = np.broadcast_to(np.expand_dims(attention_mask_float, -1), last_hidden_state.shape)
             embeddings = np.sum(last_hidden_state * input_mask_expanded, 1) / np.clip(
@@ -382,26 +361,18 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
     def tokenizer(self) -> Any:
         """
         Get the tokenizer for the model.
-
-        Returns:
-            The tokenizer for the model.
         """
         tokenizer = self.tokenizers.Tokenizer.from_file(
-            os.path.join(self.DOWNLOAD_PATH, self.EXTRACTED_FOLDER_NAME, "tokenizer.json")
+            os.path.join(self.download_path, self.EXTRACTED_FOLDER_NAME, "tokenizer.json")
         )
-        # max_seq_length = 256, for some reason sentence-transformers uses 256
-        # even though the HF config has a max length of 128
-        tokenizer.enable_truncation(max_length=256)
-        tokenizer.enable_padding(pad_id=0, pad_token="[PAD]", length=256)  # noqa: S106
+        tokenizer.enable_truncation(max_length=self.max_tokens())
+        tokenizer.enable_padding(pad_id=0, pad_token="[PAD]", length=self.max_tokens())  # noqa: S106
         return tokenizer
 
     @cached_property
     def model(self) -> Any:
         """
         Get the model.
-
-        Returns:
-            The model.
         """
         if self._preferred_providers is None or len(self._preferred_providers) == 0:
             if len(self.ort.get_available_providers()) > 0:
@@ -429,7 +400,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
             self._preferred_providers.remove("CoreMLExecutionProvider")
 
         return self.ort.InferenceSession(
-            os.path.join(self.DOWNLOAD_PATH, self.EXTRACTED_FOLDER_NAME, "model.onnx"),
+            os.path.join(self.download_path, self.EXTRACTED_FOLDER_NAME, "model.onnx"),
             # Force CPU execution provider to avoid provider issues
             providers=["CPUExecutionProvider"],
             sess_options=so,
@@ -447,7 +418,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
             "tokenizer.json",
             "vocab.txt",
         ]
-        extracted_folder = os.path.join(self.DOWNLOAD_PATH, self.EXTRACTED_FOLDER_NAME)
+        extracted_folder = os.path.join(self.download_path, self.EXTRACTED_FOLDER_NAME)
         onnx_files_exist = True
         for f in onnx_files:
             if not os.path.exists(os.path.join(extracted_folder, f)):
@@ -456,7 +427,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
 
         # Model is not downloaded yet
         if not onnx_files_exist:
-            os.makedirs(self.DOWNLOAD_PATH, exist_ok=True)
+            os.makedirs(self.download_path, exist_ok=True)
 
             logger.info("Attempting to download model from Hugging Face...")
             hf_endpoint = self._get_hf_endpoint()
@@ -465,7 +436,7 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
                     f"Failed to download model from Hugging Face (endpoint: {hf_endpoint}). "
                     f"Please check your network connection or set HF_ENDPOINT environment variable "
                     f"to use a mirror site (e.g., export HF_ENDPOINT='https://hf-mirror.com'). "
-                    f"Model ID: {self.HF_MODEL_ID}"
+                    f"Model ID: {self.hf_model_id}"
                 )
             logger.info("Model downloaded successfully from Hugging Face")
 
@@ -476,19 +447,6 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
     def __call__(self, documents: Documents) -> Embeddings:
         """
         Generate embeddings for the given documents.
-
-        Args:
-            documents: Single document (str) or list of documents (List[str])
-
-        Returns:
-            List of embedding vectors
-
-        Example:
-            >>> ef = DefaultEmbeddingFunction()
-            >>> # Single document
-            >>> embedding = ef("Hello world")
-            >>> # Multiple documents
-            >>> embeddings = ef(["Hello", "World"])
         """
         # Handle single string input
         if isinstance(documents, str):
@@ -506,6 +464,53 @@ class DefaultEmbeddingFunction(EmbeddingFunction[Documents]):
 
         # Convert numpy arrays to lists
         return [embedding.tolist() for embedding in embeddings]
+
+    @staticmethod
+    def name() -> str:
+        """Subclasses should implement this"""
+        return NotImplemented
+
+    @abstractmethod
+    def get_config(self) -> dict[str, Any]:
+        """Subclasses should implement this"""
+        return NotImplemented
+
+
+class DefaultEmbeddingFunction(ONNXEmbeddingFunction):
+    """
+    Default embedding function using ONNX runtime.
+
+    Uses the 'all-MiniLM-L6-v2' model via ONNX, which produces 384-dimensional embeddings.
+    This is a lightweight, fast model suitable for general-purpose text embeddings.
+    """
+
+    MODEL_NAME = "all-MiniLM-L6-v2"
+    HF_MODEL_ID = "sentence-transformers/all-MiniLM-L6-v2"
+    _DIMENSION = 384
+
+    def __init__(
+        self,
+        model_name: str = "all-MiniLM-L6-v2",
+        preferred_providers: list[str] | None = None,
+    ):
+        """
+        Initialize the default embedding function.
+
+        Args:
+            model_name: Name of the model (currently only 'all-MiniLM-L6-v2' is supported).
+                       Default is 'all-MiniLM-L6-v2' (384 dimensions).
+            preferred_providers: The preferred ONNX runtime providers.
+                                Defaults to None (uses available providers).
+        """
+        if model_name != self.MODEL_NAME:
+            raise ValueError(f"Currently only '{self.MODEL_NAME}' is supported, got '{model_name}'")
+
+        super().__init__(
+            model_name=model_name,
+            hf_model_id=self.HF_MODEL_ID,
+            dimension=self._DIMENSION,
+            preferred_providers=preferred_providers
+        )
 
     @staticmethod
     def name() -> str:
