@@ -17,34 +17,79 @@ from pyseekdb.client.collection import Collection
 
 class MockClient(BaseClient):
     """Mock client for testing SQL generation without actual DB connection."""
+    
     def __init__(self):
+        """Initialize MockClient with a mock executor."""
         self._executor = MagicMock()
 
     def _execute(self, sql):
+        """Execute SQL statement using mock executor.
+        
+        Args:
+            sql: SQL statement to execute.
+            
+        Returns:
+            Result from mock executor.
+        """
         return self._executor(sql)
 
     @property
     def mode(self):
+        """Return the client mode.
+        
+        Returns:
+            str: Mode identifier ('mock').
+        """
         return "mock"
 
     def is_connected(self) -> bool:
+        """Check if client is connected.
+        
+        Returns:
+            bool: Always True for mock client.
+        """
         return True
 
     def get_raw_connection(self):
+        """Get raw database connection.
+        
+        Returns:
+            MagicMock: Mock connection object.
+        """
         return MagicMock()
 
     def _ensure_connection(self):
+        """Ensure connection is established.
+        
+        Returns:
+            MagicMock: Mock connection.
+        """
         return MagicMock()
 
     def _cleanup(self):
+        """Clean up resources."""
         pass
 
     # Implement abstract methods with dummies
-    def create_collection(self, name, configuration=None, embedding_function=None, **kwargs): pass
-    def get_collection(self, name, embedding_function=None): pass
-    def delete_collection(self, name): pass
-    def list_collections(self): pass
-    def has_collection(self, name): pass
+    def create_collection(self, name, configuration=None, embedding_function=None, **kwargs): 
+        """Create a collection (not implemented for mock)."""
+        pass
+    
+    def get_collection(self, name, embedding_function=None):
+        """Get a collection (not implemented for mock)."""
+        pass
+    
+    def delete_collection(self, name):
+        """Delete a collection (not implemented for mock)."""
+        pass
+    
+    def list_collections(self):
+        """List collections (not implemented for mock)."""
+        pass
+    
+    def has_collection(self, name):
+        """Check if collection exists (not implemented for mock)."""
+        pass
 
 class TestSpecialCharacters(unittest.TestCase):
     """Tests for handling special characters in all fields (ids, documents, metadatas)."""
