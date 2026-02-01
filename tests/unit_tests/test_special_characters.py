@@ -3,21 +3,22 @@ import json
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import pytest
+from pymysql.converters import escape_string
 
 # Ensure local src/ is on sys.path
 project_root = Path(__file__).parent.parent.parent
 src_root = project_root / "src"
 sys.path.insert(0, str(src_root))
 
-from pyseekdb.client.client_base import BaseClient
-from pyseekdb.client.collection import Collection
+from pyseekdb.client.client_base import BaseClient  # noqa: E402
+from pyseekdb.client.collection import Collection  # noqa: E402
+
 
 class MockClient(BaseClient):
     """Mock client for testing SQL generation without actual DB connection."""
-    
+
     def __init__(self):
         """Initialize MockClient with a mock executor."""
         self._executor = MagicMock()
@@ -71,22 +72,22 @@ class MockClient(BaseClient):
         pass
 
     # Implement abstract methods with dummies
-    def create_collection(self, name, configuration=None, embedding_function=None, **kwargs): 
+    def create_collection(self, name, configuration=None, embedding_function=None, **kwargs):
         """Create a collection (not implemented for mock)."""
         pass
-    
+
     def get_collection(self, name, embedding_function=None):
         """Get a collection (not implemented for mock)."""
         pass
-    
+
     def delete_collection(self, name):
         """Delete a collection (not implemented for mock)."""
         pass
-    
+
     def list_collections(self):
         """List collections (not implemented for mock)."""
         pass
-    
+
     def has_collection(self, name):
         """Check if collection exists (not implemented for mock)."""
         pass
@@ -172,11 +173,13 @@ class TestSpecialCharacters(unittest.TestCase):
             call_args = self.client._executor.call_args
             self.assertIsNotNone(call_args)
             executed_sql = call_args[0][0]
+            self.assertIn("INSERT INTO", executed_sql)
+            self.assertIn("key", executed_sql)
+            self.assertIn(self.collection.name, executed_sql)
 
-            # Verify the ID is in the SQL and seems to be handled
-            # We can't easily verify exact SQL syntax without a parser,
-            # but we can check if it crashed (it didn't) and if parameters look reasonable
-            pass
+            # Verify the ID is in the SQL and is correctly escaped
+            expected_id_segment = escape_string(special_str)
+            self.assertIn(expected_id_segment, executed_sql)
 
     def test_documents_special_characters(self):
         """Test that documents with special characters are correctly escaped."""
@@ -193,8 +196,13 @@ class TestSpecialCharacters(unittest.TestCase):
 
             call_args = self.client._executor.call_args
             executed_sql = call_args[0][0]
+            self.assertIn("INSERT INTO", executed_sql)
+            self.assertIn("key", executed_sql)
+            self.assertIn(self.collection.name, executed_sql)
 
-            # Should be quoted and escaped
+            self.assertIn("INSERT INTO", executed_sql)
+            self.assertIn("key", executed_sql)
+            self.assertIn(special_str[:10], executed_sql)  # 验证部分字符串存在
             # We rely on pymysql.converters.escape_string which is trusted,
             # ensuring we pass it through.
             pass
@@ -210,6 +218,7 @@ class TestSpecialCharacters(unittest.TestCase):
             # Test as key (keys in JSON usually string, but worth testing escaping)
             # Note: JSON keys must be strings.
             metadata_key_test = {special_str: "value"}
+            self.assertIn(special_str, metadata_key_test)
 
             self.client._collection_add(
                 collection_id=self.collection.id,
@@ -221,11 +230,15 @@ class TestSpecialCharacters(unittest.TestCase):
 
             call_args = self.client._executor.call_args
             executed_sql = call_args[0][0]
+            self.assertIn("INSERT INTO", executed_sql)
+            self.assertIn("key", executed_sql)
+            self.assertIn(self.collection.name, executed_sql)
 
             # Verify JSON serialization happens and is escaped
             # json.dumps handles the quote escaping within the JSON string
             # escape_string handles the SQL string escaping
             self.assertIn("INSERT INTO", executed_sql)
+            self.assertIn("key", executed_sql)
 
     def test_collection_name_special_characters(self):
         """
