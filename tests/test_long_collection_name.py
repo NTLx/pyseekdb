@@ -4,7 +4,7 @@ Issue: https://github.com/oceanbase/pyseekdb/issues/121
 """
 import os
 import pytest
-from typing import List, Union
+from typing import List, Union, ClassVar
 
 
 class Simple3DEmbeddingFunction:
@@ -12,11 +12,11 @@ class Simple3DEmbeddingFunction:
     def __init__(self):
         self.dimension = 3
 
-    def __call__(self, input: Union[str, List[str]]) -> List[List[float]]:
-        if isinstance(input, str):
-            input = [input]
+    def __call__(self, docs: Union[str, List[str]]) -> List[List[float]]:
+        if isinstance(docs, str):
+            docs = [docs]
         embeddings = []
-        for doc in input:
+        for doc in docs:
             hash_val = hash(doc) % 1000
             embedding = [
                 float((hash_val % 10) / 10.0),
@@ -31,10 +31,10 @@ class TestLongCollectionName:
     """Test collection operations with name > 64 chars"""
 
     # 测试用长名称
-    LONG_NAMES = [
+    LONG_NAMES: ClassVar[List[str]] = [
         "a" * 65,      # 边界值 + 1
         "b" * 128,     # 128 字符
-        "c" * 512,     # 512 字符（最大）
+        "c" * 512,     # 512 字符(最大)
     ]
 
     # Server configuration from environment variables
