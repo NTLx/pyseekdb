@@ -10,6 +10,8 @@ from .cohere_embedding_function import CohereEmbeddingFunction
 from .google_vertex_embedding_function import GoogleVertexEmbeddingFunction
 from .jina_embedding_function import JinaEmbeddingFunction
 from .litellm_base_embedding_function import LiteLLMBaseEmbeddingFunction
+from .mistral_embedding_function import MistralEmbeddingFunction
+from .morph_embedding_function import MorphEmbeddingFunction
 from .ollama_embedding_function import OllamaEmbeddingFunction
 from .openai_base_embedding_function import OpenAIBaseEmbeddingFunction
 from .openai_embedding_function import OpenAIEmbeddingFunction
@@ -27,6 +29,8 @@ __all__ = [
     "GoogleVertexEmbeddingFunction",
     "JinaEmbeddingFunction",
     "LiteLLMBaseEmbeddingFunction",
+    "MistralEmbeddingFunction",
+    "MorphEmbeddingFunction",
     "OllamaEmbeddingFunction",
     "OpenAIBaseEmbeddingFunction",
     "OpenAIEmbeddingFunction",
