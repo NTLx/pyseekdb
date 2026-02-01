@@ -2017,6 +2017,64 @@ class BaseClient(BaseConnection, AdminAPI):
             finally:
                 cursor.close()
 
+    def _should_include_core_field(
+        self,
+        field: str,
+        include_key: str,
+        _source: list[str] | None,
+        include_fields: dict[str, bool],
+        whitelist_mode: bool,
+        alt_name: str | None = None,
+    ) -> bool:
+        """Helper to determine if a core field (document/embedding) should be included"""
+        if _source is not None and (field in _source or (alt_name and alt_name in _source)):
+            return True
+        return not whitelist_mode and (include_fields.get(include_key) or include_fields.get(field))
+
+    def _add_metadata_projection_columns(
+        self, columns: list[str], _source: list[str] | None, include_fields: dict[str, bool], whitelist_mode: bool
+    ) -> None:
+        """Helper to add metadata columns to projection list"""
+        if _source is None:
+            if include_fields.get("metadatas") or include_fields.get("metadata"):
+                columns.append("metadata")
+            return
+
+        # Source selection mode
+        full_meta = "metadata" in _source
+        if not full_meta and not whitelist_mode and (include_fields.get("metadatas") or include_fields.get("metadata")):
+            full_meta = True
+
+        if full_meta:
+            columns.append("metadata")
+
+        # Partial metadata extraction (dot notation)
+        for field in _source:
+            if field.startswith("metadata.") and len(field) > 9:
+                json_path = field[9:]
+                if re.match(r"^[a-zA-Z0-9_\.]+$", json_path):
+                    columns.append(f"JSON_EXTRACT(metadata, '$.{json_path}') AS `metadata.{json_path}`")
+                else:
+                    logger.warning(f"Skipping invalid json path: {json_path}")
+
+    def _merge_projected_metadata(self, row: dict[str, Any], metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Helper to unflatten and merge metadata fields starting with 'metadata.'"""
+        projected_metadata = {}
+        has_projected = False
+        for k, v in row.items():
+            if k.startswith("metadata."):
+                projected_metadata[k] = self._parse_row_value(v)
+                has_projected = True
+
+        if has_projected:
+            if metadata is None:
+                metadata = {}
+            # Unflatten and merge
+            nested = unflatten_dict(projected_metadata)
+            if "metadata" in nested and isinstance(nested["metadata"], dict):
+                metadata.update(nested["metadata"])
+        return metadata
+
     def _build_projection_sql(
         self, _source: list[str] | None, include_fields: dict[str, bool], include: list[str] | None = None
     ) -> str:
@@ -2216,24 +2274,6 @@ class BaseClient(BaseConnection, AdminAPI):
             result_item["distance"] = float(row["distance"])
 
         return result_item
-
-    def _merge_projected_metadata(self, row: dict[str, Any], metadata: dict[str, Any] | None) -> dict[str, Any] | None:
-        """Helper to unflatten and merge metadata fields starting with 'metadata.'"""
-        projected_metadata = {}
-        has_projected = False
-        for k, v in row.items():
-            if k.startswith("metadata."):
-                projected_metadata[k] = self._parse_row_value(v)
-                has_projected = True
-
-        if has_projected:
-            if metadata is None:
-                metadata = {}
-            # Unflatten and merge
-            nested = unflatten_dict(projected_metadata)
-            if "metadata" in nested and isinstance(nested["metadata"], dict):
-                metadata.update(nested["metadata"])
-        return metadata
 
     def _process_get_row(self, row: dict[str, Any], include_fields: dict[str, bool]) -> dict[str, Any]:
         """
