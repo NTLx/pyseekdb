@@ -24,10 +24,11 @@ class TestCLIBasics:
     def test_cli_version_flag(self):
         """Test that --version flag works"""
         from pyseekdb.cli import main
+        from pyseekdb import __version__
         runner = CliRunner()
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
-        assert "0.0.1" in result.output or "version" in result.output.lower()
+        assert __version__ in result.output
 
 
 class TestCollectionListCommand:
@@ -152,7 +153,7 @@ class TestCollectionDeleteCommand:
             mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
 
             # Without --yes, should prompt (input 'n' to abort)
-            result = runner.invoke(main, ["collection", "delete", "test_coll"], input="n\n")
+            runner.invoke(main, ["collection", "delete", "test_coll"], input="n\n")
             assert mock_client.delete_collection.call_count == 0
 
     def test_collection_delete_with_yes_flag(self):

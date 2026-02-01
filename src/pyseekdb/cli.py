@@ -157,7 +157,49 @@ def collection_list(ctx, output_format):
                 console.print(f"\n[dim]Total: {len(collections)} collection(s)[/dim]")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
+
+
+def _render_collection_panel(coll) -> Panel:
+    """Render the collection info panel."""
+    info_text = Text()
+    info_text.append("Name: ", style="bold")
+    info_text.append(f"{coll.name}\n", style="cyan")
+    info_text.append("Dimension: ", style="bold")
+    info_text.append(f"{coll.dimension or 'N/A'}\n", style="green")
+    info_text.append("Distance: ", style="bold")
+    info_text.append(f"{coll.distance or 'N/A'}\n", style="yellow")
+
+    try:
+        count = coll.count()
+        info_text.append("Count: ", style="bold")
+        info_text.append(f"{count}\n", style="magenta")
+    except Exception:
+        info_text.append("Count: ", style="bold")
+        info_text.append("N/A\n", style="dim")
+
+    if coll.metadata:
+        info_text.append("Metadata: ", style="bold")
+        info_text.append(f"{coll.metadata}\n", style="dim")
+
+    return Panel(info_text, title=f"Collection: {coll.name}", border_style="blue")
+
+
+def _render_peek_table(records, count: int) -> Table:
+    """Render the sample records table."""
+    table = Table()
+    table.add_column("ID", style="cyan")
+    table.add_column("Document", style="white", max_width=50)
+    table.add_column("Metadata", style="dim")
+
+    for i, id_ in enumerate(records["ids"]):
+        doc = records.get("documents", ["N/A"] * len(records["ids"]))[i]
+        meta = records.get("metadatas", [{}] * len(records["ids"]))[i]
+        # Truncate long documents
+        if doc and len(doc) > 50:
+            doc = doc[:47] + "..."
+        table.add_row(str(id_), str(doc), str(meta))
+    return table
 
 
 @collection.command("info")
@@ -177,30 +219,9 @@ def collection_info(ctx, name, peek_count):
                 coll = client.get_collection(name)
             except Exception as e:
                 console.print(f"[red]Error:[/red] Collection '{name}' not found: {e}")
-                raise SystemExit(1)
+                raise SystemExit(1) from e
 
-            # Build info display
-            info_text = Text()
-            info_text.append("Name: ", style="bold")
-            info_text.append(f"{coll.name}\n", style="cyan")
-            info_text.append("Dimension: ", style="bold")
-            info_text.append(f"{coll.dimension or 'N/A'}\n", style="green")
-            info_text.append("Distance: ", style="bold")
-            info_text.append(f"{coll.distance or 'N/A'}\n", style="yellow")
-
-            try:
-                count = coll.count()
-                info_text.append("Count: ", style="bold")
-                info_text.append(f"{count}\n", style="magenta")
-            except Exception:
-                info_text.append("Count: ", style="bold")
-                info_text.append("N/A\n", style="dim")
-
-            if coll.metadata:
-                info_text.append("Metadata: ", style="bold")
-                info_text.append(f"{coll.metadata}\n", style="dim")
-
-            console.print(Panel(info_text, title=f"Collection: {name}", border_style="blue"))
+            console.print(_render_collection_panel(coll))
 
             # Peek records if requested
             if peek_count > 0:
@@ -208,20 +229,7 @@ def collection_info(ctx, name, peek_count):
                 try:
                     records = coll.peek(limit=peek_count)
                     if records.get("ids"):
-                        table = Table()
-                        table.add_column("ID", style="cyan")
-                        table.add_column("Document", style="white", max_width=50)
-                        table.add_column("Metadata", style="dim")
-
-                        for i, id_ in enumerate(records["ids"]):
-                            doc = records.get("documents", ["N/A"] * len(records["ids"]))[i]
-                            meta = records.get("metadatas", [{}] * len(records["ids"]))[i]
-                            # Truncate long documents
-                            if doc and len(doc) > 50:
-                                doc = doc[:47] + "..."
-                            table.add_row(str(id_), str(doc), str(meta))
-
-                        console.print(table)
+                        console.print(_render_peek_table(records, peek_count))
                     else:
                         console.print("[yellow]No records found.[/yellow]")
                 except Exception as e:
@@ -230,7 +238,7 @@ def collection_info(ctx, name, peek_count):
         raise
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @collection.command("delete")
@@ -259,7 +267,7 @@ def collection_delete(ctx, name, yes):
             console.print(f"[green]Successfully deleted collection '[bold]{name}[/bold]'[/green]")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @collection.command("create")
@@ -288,7 +296,7 @@ def collection_create(ctx, name, dimension, distance):
             console.print(f"  Distance: {distance}")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
 
 @collection.command("count")
@@ -308,4 +316,4 @@ def collection_count(ctx, name):
             console.print(f"Collection '[bold cyan]{name}[/bold cyan]' has [bold green]{count}[/bold green] records.")
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e

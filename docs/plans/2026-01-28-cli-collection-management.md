@@ -45,7 +45,7 @@ seekdb = "pyseekdb.cli:main"
 
 **Step 3: Sync dependencies**
 
-Run: `cd /Users/lx/Projects/2026.01.31/pyseekdb && proxy && uv sync`
+Run: `uv sync`
 Expected: Dependencies installed successfully
 
 **Step 4: Commit**
@@ -101,7 +101,7 @@ class TestCLIBasics:
 
 **Step 2: Run test to verify it fails**
 
-Run: `cd /Users/lx/Projects/2026.01.31/pyseekdb && uv run pytest tests/unit_tests/test_cli.py -v`
+Run: `uv run pytest tests/unit_tests/test_cli.py -v`
 Expected: FAIL with "ModuleNotFoundError: No module named 'pyseekdb.cli'"
 
 **Step 3: Write minimal CLI implementation**
