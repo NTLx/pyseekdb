@@ -37,7 +37,6 @@ from .embedding_function import (
 from .filters import FilterBuilder
 from .meta_info import CollectionFieldNames, CollectionNames
 from .sql_utils import is_query_sql
-from .utils import unflatten_dict
 from .version import Version
 
 # Type alias for embedding_function parameter that can be EmbeddingFunction, None, or sentinel
@@ -49,6 +48,23 @@ _COLLECTION_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 _MAX_COLLECTION_NAME_LENGTH = 512
 
 logger = logging.getLogger(__name__)
+
+
+def unflatten_dict(d: dict[str, Any], delimiter: str = ".") -> dict[str, Any]:
+    """
+    Unflatten a dictionary with delimited keys into a nested dictionary.
+    Example: {"metadata.author": "Alice"} -> {"metadata": {"author": "Alice"}}
+    """
+    result = {}
+    for key, value in d.items():
+        parts = key.split(delimiter)
+        target = result
+        for part in parts[:-1]:
+            if part not in target:
+                target[part] = {}
+            target = target[part]
+        target[parts[-1]] = value
+    return result
 
 
 # Sentinel object to distinguish between "parameter not provided" and "explicitly set to None"
@@ -2023,70 +2039,22 @@ class BaseClient(BaseConnection, AdminAPI):
     ) -> str:
         """
         Build SQL projection clause based on _source and include parameters.
-        Returns a comma-separated string of columns to select (excluding _id which is always selected).
-
-        Logic:
-        - If _source is None: use include_fields (backward compatible)
-        - If _source is provided and include is None: use _source as whitelist (ignore default include_fields)
-        - If _source is provided and include has value: merge _source with include (additive)
         """
         columns = []
-
-        # Determine if we should respect include_fields default values
-        # Only ignore defaults when _source exists and include was not explicitly provided
         use_source_as_whitelist = _source is not None and include is None
 
         # 1. Handle document
-        # Include document if: (1) explicitly in _source, OR (2) in include (user-provided or default)
-        should_include_document = False
-        if _source is not None and "document" in _source:
-            should_include_document = True
-        # Only check include_fields if not in whitelist mode, or if include was explicitly provided
-        if not use_source_as_whitelist and (include_fields.get("documents") or include_fields.get("document")):
-            should_include_document = True
-
-        if should_include_document:
+        if self._should_include_core_field("document", "documents", _source, include_fields, use_source_as_whitelist):
             columns.append("document")
 
         # 2. Handle embedding
-        # Note: Database column is named 'embedding', but user may request it as 'vector' or 'embedding'
-        should_include_embedding = False
-        if _source is not None and ("vector" in _source or "embedding" in _source):
-            should_include_embedding = True
-        # Only check include_fields if not in whitelist mode, or if include was explicitly provided
-        if not use_source_as_whitelist and (include_fields.get("embeddings") or include_fields.get("embedding")):
-            should_include_embedding = True
-
-        if should_include_embedding:
+        if self._should_include_core_field(
+            "embedding", "embeddings", _source, include_fields, use_source_as_whitelist, alt_name="vector"
+        ):
             columns.append("embedding")
 
         # 3. Handle metadata
-        if _source is None:
-            # Default behavior: full metadata if requested
-            if include_fields.get("metadatas") or include_fields.get("metadata"):
-                columns.append("metadata")
-        else:
-            # Source selection mode
-            # Check if full metadata is requested in _source
-            if "metadata" in _source:
-                columns.append("metadata")
-            # Also check if full metadata is requested in include (when explicitly provided)
-            elif not use_source_as_whitelist and (include_fields.get("metadatas") or include_fields.get("metadata")):
-                columns.append("metadata")
-
-            # Partial metadata extraction (dot notation)
-            # e.g., metadata.author -> JSON_EXTRACT(metadata, '$.author') AS `metadata.author`
-            for field in _source:
-                if field.startswith("metadata.") and len(field) > 9:
-                    json_path = field[9:]  # remove "metadata." prefix
-                    # Basic SQL injection prevention: allow only alphanumeric, underscore, dot
-                    if not re.match(r"^[a-zA-Z0-9_\.]+$", json_path):
-                        logger.warning(f"Skipping invalid json path: {json_path}")
-                        continue
-
-                    # Use JSON_EXTRACT
-                    # Note: We use AS "metadata.xxx" to preserve the path for unflattening
-                    columns.append(f"JSON_EXTRACT(metadata, '$.{json_path}') AS `metadata.{json_path}`")
+        self._add_metadata_projection_columns(columns, _source, include_fields, use_source_as_whitelist)
 
         return ", ".join(columns) if columns else ""
 
@@ -2257,7 +2225,17 @@ class BaseClient(BaseConnection, AdminAPI):
             metadata = self._parse_row_value(row["metadata"])
 
         # Check for partial/nested metadata fields (projected fields)
-        # Scan for keys starting with "metadata."
+        metadata = self._merge_projected_metadata(row, metadata)
+        if metadata is not None:
+            result_item["metadata"] = metadata
+
+        if "distance" in row:
+            result_item["distance"] = float(row["distance"])
+
+        return result_item
+
+    def _merge_projected_metadata(self, row: dict[str, Any], metadata: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Helper to unflatten and merge metadata fields starting with 'metadata.'"""
         projected_metadata = {}
         has_projected = False
         for k, v in row.items():
@@ -2272,14 +2250,7 @@ class BaseClient(BaseConnection, AdminAPI):
             nested = unflatten_dict(projected_metadata)
             if "metadata" in nested and isinstance(nested["metadata"], dict):
                 metadata.update(nested["metadata"])
-
-        if metadata is not None:
-            result_item["metadata"] = metadata
-
-        if "distance" in row:
-            result_item["distance"] = float(row["distance"])
-
-        return result_item
+        return metadata
 
     def _process_get_row(self, row: dict[str, Any], include_fields: dict[str, bool]) -> dict[str, Any]:
         """
@@ -2309,21 +2280,7 @@ class BaseClient(BaseConnection, AdminAPI):
             metadata = self._parse_row_value(row["metadata"])
 
         # Check for partial/nested metadata fields (projected fields)
-        # Scan for keys starting with "metadata."
-        projected_metadata = {}
-        has_projected = False
-        for k, v in row.items():
-            if k.startswith("metadata."):
-                projected_metadata[k] = self._parse_row_value(v)
-                has_projected = True
-
-        if has_projected:
-            if metadata is None:
-                metadata = {}
-            # Unflatten and merge
-            nested = unflatten_dict(projected_metadata)
-            if "metadata" in nested and isinstance(nested["metadata"], dict):
-                metadata.update(nested["metadata"])
+        metadata = self._merge_projected_metadata(row, metadata)
 
         # Include embedding if requested
         if (include_fields.get("embeddings") or include_fields.get("embedding")) and row.get("embedding") is not None:
@@ -2682,10 +2639,8 @@ class BaseClient(BaseConnection, AdminAPI):
 
             # For metadata: include if in _source (any metadata field) OR in include_fields OR include is None (default)
             should_have_metadata = False
-            if _source is not None:
-                # Check if any metadata field is requested in _source
-                if "metadata" in _source or any(f.startswith("metadata.") for f in _source):
-                    should_have_metadata = True
+            if _source is not None and ("metadata" in _source or any(f.startswith("metadata.") for f in _source)):
+                should_have_metadata = True
             if "metadatas" in include_fields or include is None:
                 should_have_metadata = True
             if should_have_metadata:
@@ -2713,9 +2668,8 @@ class BaseClient(BaseConnection, AdminAPI):
             result["documents"] = result_documents
 
         should_have_metadata = False
-        if _source is not None:
-            if "metadata" in _source or any(f.startswith("metadata.") for f in _source):
-                should_have_metadata = True
+        if _source is not None and ("metadata" in _source or any(f.startswith("metadata.") for f in _source)):
+            should_have_metadata = True
         if "metadatas" in include_fields or include is None:
             should_have_metadata = True
         if should_have_metadata:

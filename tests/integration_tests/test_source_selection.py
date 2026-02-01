@@ -5,7 +5,8 @@ Tests against real database connection: biodev.cm.com:2881
 """
 
 import pytest
-from pyseekdb import RemoteServerClient, HNSWConfiguration
+
+from pyseekdb import HNSWConfiguration, RemoteServerClient
 
 
 class TestSourceSelection:
@@ -14,13 +15,7 @@ class TestSourceSelection:
     @pytest.fixture(scope="class")
     def client(self):
         """Create database client"""
-        client = RemoteServerClient(
-            host="biodev.cm.com",
-            port=2881,
-            user="root",
-            password="",
-            database="test"
-        )
+        client = RemoteServerClient(host="biodev.cm.com", port=2881, user="root", password="", database="test")
         yield client
         # Note: RemoteServerClient doesn't have close() method, connection is auto-managed
 
@@ -37,35 +32,23 @@ class TestSourceSelection:
         collection = client.create_collection(
             name=collection_name,
             embedding_function=None,
-            configuration=HNSWConfiguration(dimension=3, distance="cosine")
+            configuration=HNSWConfiguration(dimension=3, distance="cosine"),
         )
 
         # Insert test data with nested metadata
         test_metadata = {
             "title": "SeekDB 性能测试",
-            "author": {
-                "name": "Claude",
-                "id": 101,
-                "org": "Anthropic"
-            },
+            "author": {"name": "Claude", "id": 101, "org": "Anthropic"},
             "tags": ["AI", "Database", "Vector"],
-            "info": {
-                "year": 2024,
-                "status": "published",
-                "nested": {
-                    "deep": {
-                        "value": "deeply_nested"
-                    }
-                }
-            },
-            "secret": "top-secret-value"
+            "info": {"year": 2024, "status": "published", "nested": {"deep": {"value": "deeply_nested"}}},
+            "secret": "top-secret-value",
         }
 
         collection.add(
             ids="doc_1",
             embeddings=[0.1, 0.2, 0.3],
             metadatas=test_metadata,
-            documents="This is a test document for _source field selection."
+            documents="This is a test document for _source field selection.",
         )
 
         yield collection
@@ -135,10 +118,7 @@ class TestSourceSelection:
 
     def test_source_multiple_metadata_fields(self, collection):
         """Test: Return multiple metadata fields from different paths"""
-        result = collection.get(
-            ids="doc_1",
-            _source=["metadata.title", "metadata.author.name", "metadata.info.year"]
-        )
+        result = collection.get(ids="doc_1", _source=["metadata.title", "metadata.author.name", "metadata.info.year"])
 
         meta = result["metadatas"][0]
         assert "title" in meta
@@ -155,10 +135,7 @@ class TestSourceSelection:
 
     def test_source_mixed_fields(self, collection):
         """Test: Mix of core fields and metadata fields"""
-        result = collection.get(
-            ids="doc_1",
-            _source=["id", "document", "metadata.author.name"]
-        )
+        result = collection.get(ids="doc_1", _source=["id", "document", "metadata.author.name"])
 
         assert result["ids"] == ["doc_1"]
         assert result["documents"][0] is not None
@@ -187,10 +164,7 @@ class TestSourceSelection:
     def test_source_invalid_characters(self, collection):
         """Test: Invalid characters in field path are rejected"""
         # This should skip invalid fields due to regex validation
-        result = collection.get(
-            ids="doc_1",
-            _source=["metadata.title", "metadata.author'; DROP TABLE--"]
-        )
+        result = collection.get(ids="doc_1", _source=["metadata.title", "metadata.author'; DROP TABLE--"])
 
         # Should only return title, malicious path should be skipped
         meta = result["metadatas"][0]
@@ -213,11 +187,7 @@ class TestSourceSelection:
 
     def test_source_and_include_merge(self, collection):
         """Test: _source and include work together (additive)"""
-        result = collection.get(
-            ids="doc_1",
-            _source=["metadata.title"],
-            include=["documents"]
-        )
+        result = collection.get(ids="doc_1", _source=["metadata.title"], include=["documents"])
 
         assert result["documents"][0] is not None
         meta = result["metadatas"][0]
@@ -228,9 +198,7 @@ class TestSourceSelection:
     def test_query_with_source(self, collection):
         """Test: query() method supports _source"""
         result = collection.query(
-            query_embeddings=[0.1, 0.2, 0.3],
-            n_results=1,
-            _source=["metadata.title", "metadata.author.name"]
+            query_embeddings=[0.1, 0.2, 0.3], n_results=1, _source=["metadata.title", "metadata.author.name"]
         )
 
         assert len(result["ids"]) == 1
@@ -244,11 +212,7 @@ class TestSourceSelection:
 
     def test_query_source_document_only(self, collection):
         """Test: query() with document only"""
-        result = collection.query(
-            query_embeddings=[0.1, 0.2, 0.3],
-            n_results=1,
-            _source=["document"]
-        )
+        result = collection.query(query_embeddings=[0.1, 0.2, 0.3], n_results=1, _source=["document"])
 
         assert result["documents"][0][0] is not None
         assert result["metadatas"][0] == [{}]
@@ -266,7 +230,7 @@ class TestSourceSelection:
                 "metadata.author.org",
                 "metadata.info.year",
                 "metadata.info.status",
-            ]
+            ],
         )
 
         meta = result["metadatas"][0]
@@ -290,13 +254,13 @@ class TestSourceSelection:
 
     def test_source_invalid_type_string(self, collection):
         """Test: _source must be list, not string"""
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             # This should fail because _source expects list[str]
             collection.get(ids="doc_1", _source="metadata.title")
 
     def test_source_invalid_type_dict(self, collection):
         """Test: _source must be list, not dict"""
-        with pytest.raises(Exception):
+        with pytest.raises(TypeError):
             collection.get(ids="doc_1", _source={"metadata": ["title"]})
 
 
