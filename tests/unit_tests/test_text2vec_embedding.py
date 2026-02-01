@@ -11,7 +11,8 @@ mock_sentence_model = MagicMock()
 mock_text2vec.SentenceModel = mock_sentence_model
 sys.modules["text2vec"] = mock_text2vec
 
-from pyseekdb.utils.embedding_functions import Text2VecEmbeddingFunction
+from pyseekdb.utils.embedding_functions import Text2VecEmbeddingFunction  # noqa: E402
+
 
 class TestText2VecEmbeddingFunction:
     """Test Text2VecEmbeddingFunction class"""
@@ -87,7 +88,7 @@ class TestText2VecEmbeddingFunction:
             "model_name": "custom-model",
             "device": "cuda",
             "normalize_embeddings": True,
-            "kwargs": {"cache_folder": "/tmp"}
+            "kwargs": {"cache_folder": "test_cache"}
         }
 
         ef = Text2VecEmbeddingFunction.build_from_config(config)
@@ -95,7 +96,7 @@ class TestText2VecEmbeddingFunction:
         assert ef.model_name == "custom-model"
         assert ef.device == "cuda"
         assert ef.normalize_embeddings is True
-        assert ef.kwargs == {"cache_folder": "/tmp"}
+        assert ef.kwargs == {"cache_folder": "test_cache"}
 
         # Test get_config
         retrieved_config = ef.get_config()
