@@ -128,6 +128,7 @@ def collection_list(ctx, output_format):
 
             if output_format == "json":
                 import json
+
                 data = []
                 for coll in collections:
                     try:
