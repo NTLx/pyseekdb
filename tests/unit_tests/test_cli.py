@@ -1,8 +1,8 @@
 """Unit tests for CLI module"""
 
-import pytest
-from click.testing import CliRunner
 from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
 
 
 class TestCLIBasics:
@@ -11,11 +11,13 @@ class TestCLIBasics:
     def test_cli_module_imports(self):
         """Test that CLI module can be imported"""
         from pyseekdb.cli import main
+
         assert main is not None
 
     def test_cli_help_works(self):
         """Test that --help flag works"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
@@ -23,8 +25,9 @@ class TestCLIBasics:
 
     def test_cli_version_flag(self):
         """Test that --version flag works"""
-        from pyseekdb.cli import main
         from pyseekdb import __version__
+        from pyseekdb.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["--version"])
         assert result.exit_code == 0
@@ -37,6 +40,7 @@ class TestCollectionListCommand:
     def test_collection_list_command_exists(self):
         """Test that collection list command is registered"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["collection", "--help"])
         assert result.exit_code == 0
@@ -45,6 +49,7 @@ class TestCollectionListCommand:
     def test_collection_list_no_collections(self):
         """Test listing when no collections exist"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
@@ -60,6 +65,7 @@ class TestCollectionListCommand:
     def test_collection_list_with_collections(self):
         """Test listing with existing collections"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         mock_collection1 = MagicMock()
@@ -90,6 +96,7 @@ class TestCollectionInfoCommand:
     def test_collection_info_command_exists(self):
         """Test that collection info command is registered"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["collection", "info", "--help"])
         assert result.exit_code == 0
@@ -98,6 +105,7 @@ class TestCollectionInfoCommand:
     def test_collection_info_not_found(self):
         """Test info for non-existent collection"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
@@ -112,6 +120,7 @@ class TestCollectionInfoCommand:
     def test_collection_info_success(self):
         """Test info for existing collection"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         mock_collection = MagicMock()
@@ -145,6 +154,7 @@ class TestCollectionDeleteCommand:
     def test_collection_delete_requires_confirmation(self):
         """Test that delete requires --yes flag or confirmation"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
@@ -159,6 +169,7 @@ class TestCollectionDeleteCommand:
     def test_collection_delete_with_yes_flag(self):
         """Test that delete with --yes skips confirmation"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
@@ -177,6 +188,7 @@ class TestCollectionCreateCommand:
     def test_collection_create_basic(self):
         """Test creating a collection with required args"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         mock_collection = MagicMock()
@@ -189,10 +201,7 @@ class TestCollectionCreateCommand:
             mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
             mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
 
-            result = runner.invoke(main, [
-                "collection", "create", "new_collection",
-                "--dimension", "128"
-            ])
+            result = runner.invoke(main, ["collection", "create", "new_collection", "--dimension", "128"])
             assert result.exit_code == 0
             assert "new_collection" in result.output
             mock_client.create_collection.assert_called_once()
@@ -200,6 +209,7 @@ class TestCollectionCreateCommand:
     def test_collection_create_with_distance(self):
         """Test creating a collection with custom distance metric"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         mock_collection = MagicMock()
@@ -212,11 +222,9 @@ class TestCollectionCreateCommand:
             mock_client_class.return_value.__enter__ = MagicMock(return_value=mock_client)
             mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
 
-            result = runner.invoke(main, [
-                "collection", "create", "cosine_collection",
-                "--dimension", "256",
-                "--distance", "cosine"
-            ])
+            result = runner.invoke(
+                main, ["collection", "create", "cosine_collection", "--dimension", "256", "--distance", "cosine"]
+            )
             assert result.exit_code == 0
 
 
@@ -226,6 +234,7 @@ class TestCollectionCountCommand:
     def test_collection_count_success(self):
         """Test counting records in a collection"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         mock_collection = MagicMock()
@@ -248,6 +257,7 @@ class TestPingCommand:
     def test_ping_success(self):
         """Test successful connection"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
@@ -263,12 +273,11 @@ class TestPingCommand:
     def test_ping_failure(self):
         """Test failed connection"""
         from pyseekdb.cli import main
+
         runner = CliRunner()
 
         with patch("pyseekdb.cli.Client") as mock_client_class:
-            mock_client_class.return_value.__enter__ = MagicMock(
-                side_effect=Exception("Connection refused")
-            )
+            mock_client_class.return_value.__enter__ = MagicMock(side_effect=Exception("Connection refused"))
             mock_client_class.return_value.__exit__ = MagicMock(return_value=False)
 
             result = runner.invoke(main, ["ping"])
