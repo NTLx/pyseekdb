@@ -24,10 +24,16 @@ class TestText2VecEmbeddingFunction:
 
     def test_init_defaults(self):
         """Test initialization with default parameters"""
-        ef = Text2VecEmbeddingFunction()
-        assert ef.model_name == "shibing624/text2vec-base-chinese"
-        assert ef.device == "cpu"
-        assert ef.normalize_embeddings is False
+        _ef = Text2VecEmbeddingFunction()
+        assert _ef.model_name == "shibing624/text2vec-base-chinese"
+        assert _ef.device == "cpu"
+        assert _ef.normalize_embeddings is False
+
+        # Verify model was NOT initialized yet (lazy loading)
+        mock_sentence_model.assert_not_called()
+
+        # Trigger model loading
+        _ef._get_model()
 
         # Verify model was initialized
         mock_sentence_model.assert_called_with(
@@ -96,15 +102,24 @@ class TestText2VecEmbeddingFunction:
         assert retrieved_config == config
 
     def test_lazy_loading(self):
-        """Test that model is loaded only when needed (or in init)"""
+        """Test that model is loaded only when needed"""
         # Clear cache first
         Text2VecEmbeddingFunction.models.clear()
         mock_sentence_model.reset_mock()
 
-        # First init should load model
-        ef = Text2VecEmbeddingFunction(model_name="new-model")
+        # First init should NOT load model immediately
+        _ef = Text2VecEmbeddingFunction(model_name="new-model")
+        mock_sentence_model.assert_not_called()
+
+        # First usage should load model
+        _ef._get_model()
         mock_sentence_model.assert_called_once()
 
-        # Second init with same model should not call constructor again
-        ef2 = Text2VecEmbeddingFunction(model_name="new-model")
-        mock_sentence_model.assert_called_once()  # Call count remains 1
+        # Second usage with same config should not call constructor again
+        _ef._get_model()
+        mock_sentence_model.assert_called_once()
+
+        # Another instance with same config should reuse cached model
+        _ef2 = Text2VecEmbeddingFunction(model_name="new-model")
+        _ef2._get_model()
+        mock_sentence_model.assert_called_once()

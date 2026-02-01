@@ -19,6 +19,7 @@ from .sentence_transformer_embedding_function import (
 )
 from .siliconflow_embedding_function import SiliconflowEmbeddingFunction
 from .tencent_hunyuan_embedding_function import TencentHunyuanEmbeddingFunction
+from .text2vec_embedding_function import Text2VecEmbeddingFunction
 from .voyageai_embedding_function import VoyageaiEmbeddingFunction
 
 __all__ = [
@@ -34,7 +35,6 @@ __all__ = [
     "SentenceTransformerEmbeddingFunction",
     "SiliconflowEmbeddingFunction",
     "TencentHunyuanEmbeddingFunction",
-    "VoyageaiEmbeddingFunction",
     "Text2VecEmbeddingFunction",
+    "VoyageaiEmbeddingFunction",
 ]
-from .text2vec_embedding_function import Text2VecEmbeddingFunction

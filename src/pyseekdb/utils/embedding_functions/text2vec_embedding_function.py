@@ -5,7 +5,7 @@ This module provides an embedding function using the text2vec library,
 which is a powerful multilingual embedding model trained on HuggingFace.
 """
 
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Optional
 from pyseekdb.client.embedding_function import (
     Documents,
     EmbeddingFunction,
@@ -22,7 +22,8 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
     """
 
     # Class variable to cache loaded models
-    models: ClassVar[dict[str, Any]] = {}
+    # Key: (model_name, device, frozenset(kwargs.items()))
+    models: ClassVar[dict[tuple[str, str, frozenset[tuple[str, Any]]], Any]] = {}
 
     def __init__(
         self,
@@ -41,35 +42,45 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
         self.device = device
         self.normalize_embeddings = normalize_embeddings
         self.kwargs = kwargs
+        self._cached_dimension: Optional[int] = None
+        self._model_instance: Any = None
 
-        # Lazy import - only load text2vec when needed
-        if model_name not in self.models:
+    def _get_model(self) -> Any:
+        """Get or initialize the text2vec model instance."""
+        if self._model_instance is not None:
+            return self._model_instance
+
+        cache_key = (self.model_name, self.device, frozenset(self.kwargs.items()))
+        if cache_key not in self.models:
             try:
                 from text2vec import SentenceModel
                 # Initialize the model
-                self.models[model_name] = SentenceModel(
-                    model_name_or_path=model_name,
-                    device=device,
-                    **kwargs
+                self.models[cache_key] = SentenceModel(
+                    model_name_or_path=self.model_name,
+                    device=self.device,
+                    **self.kwargs
                 )
             except ImportError as exc:
-                raise ValueError(
+                raise ImportError(
                     "The text2vec python package is not installed. "
                     "Please install it with: `pip install text2vec`"
                 ) from exc
 
-        # Get the actual model instance
-        self._model = self.models[model_name]
+        self._model_instance = self.models[cache_key]
+        return self._model_instance
 
     @property
     def dimension(self) -> int:
         """Get the dimension of embeddings produced by this function."""
-        # Get dimension from the model's encoding directly if possible
-        # Or try encoding a dummy string
-        sample = self._model.encode("test", normalize_embeddings=self.normalize_embeddings)
-        if hasattr(sample, 'shape'):
-            return sample.shape[0] if len(sample.shape) == 1 else sample.shape[1]
-        return len(sample)
+        if self._cached_dimension is None:
+            # Get dimension from the model
+            model = self._get_model()
+            sample = model.encode("test", normalize_embeddings=self.normalize_embeddings)
+            if hasattr(sample, 'shape'):
+                self._cached_dimension = int(sample.shape[0] if len(sample.shape) == 1 else sample.shape[1])
+            else:
+                self._cached_dimension = len(sample)
+        return self._cached_dimension
 
     def __call__(self, documents: Documents) -> Embeddings:
         """Generate embeddings for given documents."""
@@ -82,8 +93,8 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
             return []
 
         # Generate embeddings using text2vec
-        # text2vec's encode returns numpy array or list based on implementation
-        embeddings = self._model.encode(
+        model = self._get_model()
+        embeddings = model.encode(
             list(documents),
             normalize_embeddings=self.normalize_embeddings,
         )
