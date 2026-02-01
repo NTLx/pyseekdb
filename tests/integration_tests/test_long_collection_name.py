@@ -2,11 +2,15 @@
 Integration tests for collection names exceeding 64 characters.
 """
 
+import hashlib
+from typing import ClassVar
+
 import pytest
 
 
 class Simple3DEmbeddingFunction:
     """Simple 3D embedding function for testing."""
+
     def __init__(self):
         self.dimension = 3
 
@@ -16,23 +20,23 @@ class Simple3DEmbeddingFunction:
         embeddings = []
         for doc in texts:
             # Use a deterministic hash for testing
-            import hashlib
-            hash_val = int(hashlib.md5(doc.encode()).hexdigest(), 16) % 1000
+            hash_val = int(hashlib.md5(doc.encode(), usedforsecurity=False).hexdigest(), 16) % 1000
             embedding = [
                 float((hash_val % 10) / 10.0),
                 float(((hash_val // 10) % 10) / 10.0),
-                float(((hash_val // 100) % 10) / 10.0)
+                float(((hash_val // 100) % 10) / 10.0),
             ]
             embeddings.append(embedding)
         return embeddings
 
+
 class TestLongCollectionName:
     """Test collection operations with names > 64 characters using standard db_client."""
 
-    LONG_NAMES = [
-        "a" * 65,      # Boundary + 1
-        "b" * 128,     # 128 chars
-        "c" * 512,     # 512 chars (Max)
+    LONG_NAMES: ClassVar[list[str]] = [
+        "a" * 65,  # Boundary + 1
+        "b" * 128,  # 128 chars
+        "c" * 512,  # 512 chars (Max)
     ]
 
     def test_create_collection_with_long_name(self, db_client):
