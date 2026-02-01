@@ -1,9 +1,8 @@
 """
 Unit tests for Text2VecEmbeddingFunction
 """
-import pytest
-from unittest.mock import MagicMock, patch
 import sys
+from unittest.mock import MagicMock
 
 # Pre-mock text2vec to avoid import errors (like missing _lzma) in restricted environments
 mock_text2vec = MagicMock()

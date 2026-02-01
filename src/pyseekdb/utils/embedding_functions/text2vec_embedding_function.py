@@ -5,7 +5,8 @@ This module provides an embedding function using the text2vec library,
 which is a powerful multilingual embedding model trained on HuggingFace.
 """
 
-from typing import Any, ClassVar, Optional
+from typing import Any, ClassVar
+
 from pyseekdb.client.embedding_function import (
     Documents,
     EmbeddingFunction,
@@ -42,7 +43,7 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
         self.device = device
         self.normalize_embeddings = normalize_embeddings
         self.kwargs = kwargs
-        self._cached_dimension: Optional[int] = None
+        self._cached_dimension: int | None = None
         self._model_instance: Any = None
 
     def _get_model(self) -> Any:
