@@ -174,8 +174,8 @@ class TestSpecialCharacters(unittest.TestCase):
             self.assertIsNotNone(call_args)
             executed_sql = call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("key", executed_sql)
-            self.assertIn(self.collection.name, executed_sql)
+            self.assertIn("_id", executed_sql)
+            self.assertIn(self.collection.id, executed_sql)
 
             # Verify the ID is in the SQL and is correctly escaped
             expected_id_segment = escape_string(special_str)
@@ -197,12 +197,12 @@ class TestSpecialCharacters(unittest.TestCase):
             call_args = self.client._executor.call_args
             executed_sql = call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("key", executed_sql)
-            self.assertIn(self.collection.name, executed_sql)
+            self.assertIn("_id", executed_sql)
+            self.assertIn(self.collection.id, executed_sql)
 
-            self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("key", executed_sql)
-            self.assertIn(special_str[:10], executed_sql)  # 验证部分字符串存在
+            # Verify content is in SQL and correctly escaped
+            expected_doc_segment = escape_string(special_str)
+            self.assertIn(expected_doc_segment, executed_sql)
             # We rely on pymysql.converters.escape_string which is trusted,
             # ensuring we pass it through.
             pass
@@ -231,14 +231,14 @@ class TestSpecialCharacters(unittest.TestCase):
             call_args = self.client._executor.call_args
             executed_sql = call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("key", executed_sql)
-            self.assertIn(self.collection.name, executed_sql)
+            self.assertIn("_id", executed_sql)
+            self.assertIn(self.collection.id, executed_sql)
 
-            # Verify JSON serialization happens and is escaped
-            # json.dumps handles the quote escaping within the JSON string
-            # escape_string handles the SQL string escaping
-            self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("key", executed_sql)
+            # Verify JSON serialization and SQL escaping
+            # json.dumps handles special chars inside JSON string
+            # escape_string handles the SQL level escaping
+            expected_meta_segment = escape_string(json.dumps(metadata))
+            self.assertIn(expected_meta_segment, executed_sql)
 
     def test_collection_name_special_characters(self):
         """
