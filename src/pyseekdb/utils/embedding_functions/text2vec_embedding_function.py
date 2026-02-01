@@ -55,16 +55,14 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
         if cache_key not in self.models:
             try:
                 from text2vec import SentenceModel
+
                 # Initialize the model
                 self.models[cache_key] = SentenceModel(
-                    model_name_or_path=self.model_name,
-                    device=self.device,
-                    **self.kwargs
+                    model_name_or_path=self.model_name, device=self.device, **self.kwargs
                 )
             except ImportError as exc:
                 raise ImportError(
-                    "The text2vec python package is not installed. "
-                    "Please install it with: `pip install text2vec`"
+                    "The text2vec python package is not installed. Please install it with: `pip install text2vec`"
                 ) from exc
 
         self._model_instance = self.models[cache_key]
@@ -77,7 +75,7 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
             # Get dimension from the model
             model = self._get_model()
             sample = model.encode("test", normalize_embeddings=self.normalize_embeddings)
-            if hasattr(sample, 'shape'):
+            if hasattr(sample, "shape"):
                 self._cached_dimension = int(sample.shape[0] if len(sample.shape) == 1 else sample.shape[1])
             else:
                 self._cached_dimension = len(sample)
@@ -101,7 +99,7 @@ class Text2VecEmbeddingFunction(EmbeddingFunction[Documents]):
         )
 
         # Convert to list of lists
-        if hasattr(embeddings, 'tolist'):
+        if hasattr(embeddings, "tolist"):
             return embeddings.tolist()
         return list(embeddings)
 

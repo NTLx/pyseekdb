@@ -1,6 +1,7 @@
 """
 Unit tests for Text2VecEmbeddingFunction
 """
+
 import sys
 from unittest.mock import MagicMock
 
@@ -36,10 +37,7 @@ class TestText2VecEmbeddingFunction:
         _ef._get_model()
 
         # Verify model was initialized
-        mock_sentence_model.assert_called_with(
-            model_name_or_path="shibing624/text2vec-base-chinese",
-            device="cpu"
-        )
+        mock_sentence_model.assert_called_with(model_name_or_path="shibing624/text2vec-base-chinese", device="cpu")
 
     def test_call(self):
         """Test embedding generation"""
@@ -61,10 +59,7 @@ class TestText2VecEmbeddingFunction:
         assert embeddings == [[0.1, 0.2, 0.3]]
 
         # Verify mock was called correctly
-        mock_instance.encode.assert_called_with(
-            ["test document"],
-            normalize_embeddings=False
-        )
+        mock_instance.encode.assert_called_with(["test document"], normalize_embeddings=False)
 
     def test_dimension(self):
         """Test dimension property"""
@@ -87,7 +82,7 @@ class TestText2VecEmbeddingFunction:
             "model_name": "custom-model",
             "device": "cuda",
             "normalize_embeddings": True,
-            "kwargs": {"cache_folder": "test_cache"}
+            "kwargs": {"cache_folder": "test_cache"},
         }
 
         ef = Text2VecEmbeddingFunction.build_from_config(config)
