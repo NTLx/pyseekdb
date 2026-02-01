@@ -1,9 +1,8 @@
 """
 Test collection name length > 64 characters
-测试 collection name 长度超过 64 字符的情况
-
 Issue: https://github.com/oceanbase/pyseekdb/issues/121
 """
+import os
 import pytest
 from typing import List, Union
 
@@ -38,16 +37,19 @@ class TestLongCollectionName:
         "c" * 512,     # 512 字符（最大）
     ]
 
-    # 环境变量配置
-    SERVER_HOST = "biodev.cm.com"
-    SERVER_PORT = 2881
-    SERVER_DATABASE = "test"
-    SERVER_USER = "root"
-    SERVER_PASSWORD = ""
+    # Server configuration from environment variables
+    SERVER_HOST = os.environ.get("SEEKDB_HOST")
+    SERVER_PORT = int(os.environ.get("SEEKDB_PORT", "2881"))
+    SERVER_DATABASE = os.environ.get("SEEKDB_DATABASE", "test")
+    SERVER_USER = os.environ.get("SEEKDB_USER", "root")
+    SERVER_PASSWORD = os.environ.get("SEEKDB_PASSWORD", "")
 
     @pytest.fixture
     def server_client(self):
         """Create server mode client"""
+        if not self.SERVER_HOST:
+            pytest.skip("SEEKDB_HOST not configured, skipping remote server tests")
+
         import pyseekdb
         client = pyseekdb.Client(
             host=self.SERVER_HOST,
@@ -158,14 +160,3 @@ class TestLongCollectionName:
             assert len(collection.name) == length
             print(f"   Success: {name[:50]}...")
             server_client.delete_collection(name=name)
-
-
-if __name__ == "__main__":
-    print("\n" + "="*60)
-    print("pyseekdb - Long Collection Name Tests")
-    print("="*60)
-    print(f"\nEnvironment Configuration:")
-    print(f"  Server: {TestLongCollectionName.SERVER_HOST}:{TestLongCollectionName.SERVER_PORT}")
-    print(f"  Database: {TestLongCollectionName.SERVER_DATABASE}")
-    print("="*60 + "\n")
-    pytest.main([__file__, "-v", "-s"])
