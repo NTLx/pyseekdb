@@ -1,4 +1,3 @@
-
 import json
 import sys
 import unittest
@@ -25,10 +24,10 @@ class MockClient(BaseClient):
 
     def _execute(self, sql):
         """Execute SQL statement using mock executor.
-        
+
         Args:
             sql: SQL statement to execute.
-            
+
         Returns:
             Result from mock executor.
         """
@@ -37,7 +36,7 @@ class MockClient(BaseClient):
     @property
     def mode(self):
         """Return the client mode.
-        
+
         Returns:
             str: Mode identifier ('mock').
         """
@@ -45,7 +44,7 @@ class MockClient(BaseClient):
 
     def is_connected(self) -> bool:
         """Check if client is connected.
-        
+
         Returns:
             bool: Always True for mock client.
         """
@@ -53,7 +52,7 @@ class MockClient(BaseClient):
 
     def get_raw_connection(self):
         """Get raw database connection.
-        
+
         Returns:
             MagicMock: Mock connection object.
         """
@@ -61,7 +60,7 @@ class MockClient(BaseClient):
 
     def _ensure_connection(self):
         """Ensure connection is established.
-        
+
         Returns:
             MagicMock: Mock connection.
         """
@@ -92,6 +91,7 @@ class MockClient(BaseClient):
         """Check if collection exists (not implemented for mock)."""
         pass
 
+
 class TestSpecialCharacters(unittest.TestCase):
     """Tests for handling special characters in all fields (ids, documents, metadatas)."""
 
@@ -103,11 +103,7 @@ class TestSpecialCharacters(unittest.TestCase):
 
         # Create a dummy collection
         self.collection_name = "test_collection"
-        self.collection = Collection(
-            client=self.client,
-            name=self.collection_name,
-            collection_id="test_id_123"
-        )
+        self.collection = Collection(client=self.client, name=self.collection_name, collection_id="test_id_123")
 
         # Define special test cases
         self.special_chars = [
@@ -117,7 +113,6 @@ class TestSpecialCharacters(unittest.TestCase):
             "admin' --",
             '"',
             "`",
-
             # Special syntax characters
             "\\",
             "\\\\",
@@ -125,19 +120,16 @@ class TestSpecialCharacters(unittest.TestCase):
             "\r",
             "\t",
             "\0",
-
             # Unicode and Languages
             "中文测试",
             "ñandú",
             "München",
             "עִבְרִית",  # Hebrew
             "العربية",  # Arabic
-
             # Emojis
             "😀",
             "👨‍👩‍👧‍👦",
             "🔥",
-
             # Whitespace
             "   ",
             " ",
@@ -166,7 +158,7 @@ class TestSpecialCharacters(unittest.TestCase):
                 collection_id=self.collection.id,
                 collection_name=self.collection.name,
                 ids=[special_str],
-                embeddings=[[0.1, 0.2]], # Dummy embedding
+                embeddings=[[0.1, 0.2]],  # Dummy embedding
             )
 
             # Check the executed SQL
@@ -191,7 +183,7 @@ class TestSpecialCharacters(unittest.TestCase):
                 collection_name=self.collection.name,
                 ids=["id_1"],
                 documents=[special_str],
-                embeddings=[[0.1, 0.2]]
+                embeddings=[[0.1, 0.2]],
             )
 
             call_args = self.client._executor.call_args
@@ -225,7 +217,7 @@ class TestSpecialCharacters(unittest.TestCase):
                 collection_name=self.collection.name,
                 ids=["id_val"],
                 embeddings=[[0.1, 0.2]],
-                metadatas=[metadata]
+                metadatas=[metadata],
             )
 
             call_args = self.client._executor.call_args
@@ -237,7 +229,7 @@ class TestSpecialCharacters(unittest.TestCase):
             # Verify JSON serialization and SQL escaping
             # json.dumps handles special chars inside JSON string
             # escape_string handles the SQL level escaping
-            expected_meta_segment = escape_string(json.dumps(metadata))
+            expected_meta_segment = escape_string(json.dumps(metadata, ensure_ascii=False))
             self.assertIn(expected_meta_segment, executed_sql)
 
     def test_collection_name_special_characters(self):
@@ -251,18 +243,12 @@ class TestSpecialCharacters(unittest.TestCase):
         _validate_collection_name("valid_name_123")
 
         # Invalid names (should raise ValueError)
-        invalid_names = [
-            "name with spaces",
-            "name-with-dash",
-            "name.with.dot",
-            "name@symbol",
-            "中文",
-            "test\nname"
-        ]
+        invalid_names = ["name with spaces", "name-with-dash", "name.with.dot", "name@symbol", "中文", "test\nname"]
 
         for name in invalid_names:
             with self.assertRaises(ValueError):
                 _validate_collection_name(name)
+
 
 if __name__ == "__main__":
     unittest.main()
