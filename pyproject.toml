@@ -42,7 +42,7 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["demo/rag"]
+# members = ["demo/rag"]
 
 [tool.pdm.build]
 source-includes = ["docs/", "examples/", "tests/"]
