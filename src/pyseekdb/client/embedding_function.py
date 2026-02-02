@@ -509,7 +509,7 @@ class DefaultEmbeddingFunction(ONNXEmbeddingFunction):
             model_name=model_name,
             hf_model_id=self.HF_MODEL_ID,
             dimension=self._DIMENSION,
-            preferred_providers=preferred_providers
+            preferred_providers=preferred_providers,
         )
 
     @staticmethod
