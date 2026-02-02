@@ -1259,6 +1259,169 @@ python3 -m pytest tests/integration_tests/test_collection_query.py -v
 python3 -m pytest tests/integration_tests/test_collection_query.py::TestCollectionQuery::test_collection_query -v
 ```
 
+## CLI Tool
+
+pyseekdb provides a command-line interface tool for debugging and managing collections.
+
+### Installation
+
+The CLI tool is included with pyseekdb. Make sure to install with the required dependencies:
+
+```bash
+pip install -U pyseekdb
+```
+
+### Usage
+
+```bash
+# Show help
+pyseekdb --help
+
+# Or use as module
+python -m pyseekdb.cli --help
+```
+
+### Connection Options
+
+The CLI tool supports both embedded and remote server modes:
+
+```bash
+# Embedded mode (default)
+pyseekdb --path /path/to/seekdb --database mydb list-collections
+
+# Remote server mode (seekdb Server)
+pyseekdb --host localhost --port 2881 --tenant sys --database mydb --user root list-collections
+
+# Remote server mode (OceanBase)
+pyseekdb --host localhost --port 2881 --tenant test --database mydb --user root list-collections
+```
+
+### Commands
+
+#### List Collections
+
+Display all collections in the database:
+
+```bash
+pyseekdb list-collections
+```
+
+Output:
+```text
++----+------------------+-----------------+---------+
+| ID | Name             | Document Count  | Status  |
++----+------------------+-----------------+---------+
+| 1  | my_collection    | 100             | READY   |
+| 2  | another_collection | 50             | READY   |
++----+------------------+-----------------+---------+
+```
+
+#### Collection Info
+
+Show detailed information about a specific collection:
+
+```bash
+pyseekdb collection-info my_collection
+```
+
+Output:
+```text
+=== Collection: my_collection ===
+Document Count: 100
+Collection ID: xxx
+```
+
+#### Query Collection
+
+Query and display documents from a collection:
+
+```bash
+# Default: show 10 documents in table format
+pyseekdb query my_collection
+
+# Show 20 documents
+pyseekdb query my_collection --limit 20
+
+# Output as JSON
+pyseekdb query my_collection --output json
+
+# With pagination
+pyseekdb query my_collection --limit 10 --offset 20
+```
+
+#### Collection Statistics
+
+Show statistics for a collection:
+
+```bash
+pyseekdb collection-stats my_collection
+```
+
+Output:
+```text
+=== Collection Statistics: my_collection ===
+Total Documents: 100
+Sample Size: 100
+Average Document Length: 256.32 characters
+Min Document Length: 50
+Max Document Length: 1024
+```
+
+#### Collections Summary
+
+Show a summary of all collections with statistics:
+
+```bash
+pyseekdb summary
+```
+
+Output:
+```text
++-----------+------------+---------+
+| Name      | Documents  | Status  |
++-----------+------------+---------+
+| coll1     | 100        | READY   |
+| coll2     | 50         | READY   |
++-----------+------------+---------+
+
+Total documents across all collections: 150
+Total collections: 2
+```
+
+#### Delete Collection
+
+Delete a collection from the database:
+
+```bash
+# With confirmation
+pyseekdb delete my_collection
+
+# Force delete without confirmation
+pyseekdb delete my_collection --force
+```
+
+### Examples
+
+```bash
+# List all collections
+pyseekdb list-collections
+
+# Check a specific collection
+pyseekdb collection-info my_collection
+
+# View sample documents
+pyseekdb query my_collection --limit 5
+
+# Get collection statistics
+pyseekdb collection-stats my_collection
+
+# Quick summary of all collections
+pyseekdb summary
+
+# Clean up a test collection
+pyseekdb delete test_collection --force
+```
+
 ## License
 
 This package is licensed under Apache 2.0.
