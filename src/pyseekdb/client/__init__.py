@@ -27,6 +27,7 @@ from .client_seekdb_embedded import SeekdbEmbeddedClient
 from .client_seekdb_server import RemoteServerClient
 from .configuration import Configuration, FulltextIndexConfig, HNSWConfiguration
 from .database import Database
+
 from .embedding_function import (
     DefaultEmbeddingFunction,
     EmbeddingFunction,
@@ -46,6 +47,10 @@ from .hybrid_search import (
     K,
 )
 from .version import Version
+
+from .version import Version
+from .admin_client import AdminAPI, _AdminClientProxy, _ClientProxy
+
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +128,7 @@ def _create_server_client(
 
 
 __all__ = [
+
     "DOCUMENT",
     "DOCUMENTS",
     "EMBEDDINGS",
@@ -150,6 +156,24 @@ __all__ = [
     "Version",
     "get_default_embedding_function",
     "register_embedding_function",
+
+    'BaseConnection',
+    'BaseClient',
+    'ClientAPI',
+    'HNSWConfiguration',
+    'DEFAULT_VECTOR_DIMENSION',
+    'DEFAULT_DISTANCE_METRIC',
+    'EmbeddingFunction',
+    'DefaultEmbeddingFunction',
+    'get_default_embedding_function',
+    'SeekdbEmbeddedClient',
+    'RemoteServerClient',
+    'Client',
+    'AdminAPI',
+    'AdminClient',
+    'Database',
+    'Version',
+
 ]
 
 
