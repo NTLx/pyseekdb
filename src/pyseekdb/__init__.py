@@ -63,7 +63,7 @@ import importlib.metadata
 # Note: pylibseekdb built with ABI=0 and onnxruntime built with ABI=1, so there's a conflict between the two libraries.
 # pylibseekdb is built both with ABI=0 and the -Bsymbolic flag, so we can load libraries with ABI=1 first
 # and then pylibseekdb to avoid these conflicts.
-import onnxruntime  # noqa: F401
+import onnxruntime
 
 from .client import (
     AdminAPI,
