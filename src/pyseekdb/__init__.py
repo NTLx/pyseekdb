@@ -63,7 +63,11 @@ import importlib.metadata
 # Note: pylibseekdb built with ABI=0 and onnxruntime built with ABI=1, so there's a conflict between the two libraries.
 # pylibseekdb is built both with ABI=0 and the -Bsymbolic flag, so we can load libraries with ABI=1 first
 # and then pylibseekdb to avoid these conflicts.
+
 import onnxruntime  # noqa: F401
+
+import onnxruntime
+
 
 from .client import (
     AdminAPI,
@@ -74,6 +78,7 @@ from .client import (
     ClientAPI,
     Configuration,
     Database,
+
     DefaultEmbeddingFunction,
     EmbeddingFunction,
     FulltextIndexConfig,
@@ -83,6 +88,9 @@ from .client import (
     Version,
     get_default_embedding_function,
     register_embedding_function,
+
+    Version,
+
 )
 from .client.collection import Collection
 
@@ -94,6 +102,7 @@ except importlib.metadata.PackageNotFoundError:
 __author__ = "OceanBase <open_oceanbase@oceanbase.com>"
 
 __all__ = [
+
     "AdminAPI",
     "AdminClient",
     "BaseClient",
@@ -112,4 +121,23 @@ __all__ = [
     "Version",
     "get_default_embedding_function",
     "register_embedding_function",
+
+    'BaseConnection',
+    'BaseClient',
+    'ClientAPI',
+    'HNSWConfiguration',
+    'DEFAULT_VECTOR_DIMENSION',
+    'DEFAULT_DISTANCE_METRIC',
+    'EmbeddingFunction',
+    'DefaultEmbeddingFunction',
+    'get_default_embedding_function',
+    'SeekdbEmbeddedClient',
+    'RemoteServerClient',
+    'Client',
+    'Collection',
+    'AdminAPI',
+    'AdminClient',
+    'Database',
+    'Version',
+
 ]

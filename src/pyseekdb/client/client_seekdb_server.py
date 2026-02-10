@@ -4,7 +4,11 @@ Supports both seekdb Server and OceanBase Server
 """
 
 import logging
+
 from collections.abc import Sequence
+
+from typing import Any, Optional, Sequence, Tuple
+
 
 import pymysql
 from pymysql.cursors import DictCursor
@@ -62,7 +66,7 @@ class RemoteServerClient(BaseClient):
 
         logger.debug(f"Initialize RemoteServerClient: {self.full_user}@{self.host}:{self.port}/{self.database}")
 
-    # ==================== Connection Management ====================
+    # ====== Connection Management ======
 
     def _ensure_connection(self) -> pymysql.Connection:
         """Ensure connection is established (internal method)"""
@@ -101,7 +105,7 @@ class RemoteServerClient(BaseClient):
     def mode(self) -> str:
         return "RemoteServerClient"
 
-    # ==================== Collection Management (framework) ====================
+    # ====== Collection Management (framework) ======
 
     # create_collection is inherited from BaseClient - no override needed
     # get_collection is inherited from BaseClient - no override needed
@@ -109,7 +113,7 @@ class RemoteServerClient(BaseClient):
     # list_collections is inherited from BaseClient - no override needed
     # has_collection is inherited from BaseClient - no override needed
 
-    # ==================== Collection Internal Operations ====================
+    # ====== Collection Internal Operations ======
     # These methods are called by Collection objects
 
     # -------------------- DML Operations --------------------
@@ -127,7 +131,7 @@ class RemoteServerClient(BaseClient):
 
     # _collection_count is inherited from BaseClient - no override needed
 
-    # ==================== Database Management ====================
+    # ====== Database Management ======
 
     def create_database(self, name: str, tenant: str = DEFAULT_TENANT) -> None:
         """
