@@ -29,9 +29,15 @@ from pyseekdb import Client, HNSWConfiguration, __version__
     help="SeekDB server port (env: SEEKDB_PORT)",
 )
 @click.option(
+    "--tenant",
+    envvar="SEEKDB_TENANT",
+    default="sys",
+    help="Tenant name (env: SEEKDB_TENANT)",
+)
+@click.option(
     "--user",
     envvar="SEEKDB_USER",
-    default="root@test",
+    default="root",
     help="Database user (env: SEEKDB_USER)",
 )
 @click.option(
@@ -47,7 +53,7 @@ from pyseekdb import Client, HNSWConfiguration, __version__
     help="Database name (env: SEEKDB_DATABASE)",
 )
 @click.pass_context
-def main(ctx, host, port, user, password, database):
+def main(ctx, host, port, tenant, user, password, database):
     """PySeekDB CLI - Manage and inspect SeekDB collections.
 
     Connection can be configured via command-line options or environment variables:
@@ -55,7 +61,8 @@ def main(ctx, host, port, user, password, database):
     \b
     SEEKDB_HOST     - Server hostname (default: 127.0.0.1)
     SEEKDB_PORT     - Server port (default: 2881)
-    SEEKDB_USER     - Database user (default: root@test)
+    SEEKDB_TENANT   - Tenant name (default: sys)
+    SEEKDB_USER     - Database user (default: root)
     SEEKDB_PASSWORD - Database password
     SEEKDB_DATABASE - Database name (default: test)
     """
@@ -63,6 +70,7 @@ def main(ctx, host, port, user, password, database):
     ctx.obj["connection"] = {
         "host": host,
         "port": port,
+        "tenant": tenant,
         "user": user,
         "password": password,
         "database": database,
@@ -73,9 +81,9 @@ def get_client(ctx):
     """Create a client from context connection info."""
     conn = ctx.obj["connection"]
     return Client(
-        mode="server",
         host=conn["host"],
         port=conn["port"],
+        tenant=conn["tenant"],
         user=conn["user"],
         password=conn["password"],
         database=conn["database"],
@@ -98,6 +106,7 @@ def ping(ctx):
             console.print("[green]Successfully connected to SeekDB![/green]")
             console.print(f"  Host: {conn['host']}")
             console.print(f"  Port: {conn['port']}")
+            console.print(f"  Tenant: {conn['tenant']}")
             console.print(f"  User: {conn['user']}")
             console.print(f"  Database: {conn['database']}")
     except Exception as e:
@@ -186,7 +195,7 @@ def _render_collection_panel(coll) -> Panel:
     return Panel(info_text, title=f"Collection: {coll.name}", border_style="blue")
 
 
-def _render_peek_table(records, count: int) -> Table:
+def _render_peek_table(records) -> Table:
     """Render the sample records table."""
     table = Table()
     table.add_column("ID", style="cyan")
@@ -230,7 +239,7 @@ def collection_info(ctx, name, peek_count):
                 try:
                     records = coll.peek(limit=peek_count)
                     if records.get("ids"):
-                        console.print(_render_peek_table(records, peek_count))
+                        console.print(_render_peek_table(records))
                     else:
                         console.print("[yellow]No records found.[/yellow]")
                 except Exception as e:
