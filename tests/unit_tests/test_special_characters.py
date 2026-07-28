@@ -1,18 +1,11 @@
 import json
-import sys
 import unittest
-from pathlib import Path
 from unittest.mock import MagicMock
 
 from pymysql.converters import escape_string
 
-# Ensure local src/ is on sys.path
-project_root = Path(__file__).parent.parent.parent
-src_root = project_root / "src"
-sys.path.insert(0, str(src_root))
-
-from pyseekdb.client.client_base import BaseClient  # noqa: E402
-from pyseekdb.client.collection import Collection  # noqa: E402
+from pyseekdb.client.client_base import BaseClient
+from pyseekdb.client.collection import Collection
 
 
 class MockClient(BaseClient):
@@ -204,33 +197,42 @@ class TestSpecialCharacters(unittest.TestCase):
         for special_str in self.special_chars:
             self.client._executor.reset_mock()
 
-            # Test as value
-            metadata = {"key": special_str}
-
-            # Test as key (keys in JSON usually string, but worth testing escaping)
-            # Note: JSON keys must be strings.
-            metadata_key_test = {special_str: "value"}
-            self.assertIn(special_str, metadata_key_test)
-
+            # Test as value: {key: special_str}
+            metadata_value = {"key": special_str}
             self.client._collection_add(
                 collection_id=self.collection.id,
                 collection_name=self.collection.name,
                 ids=["id_val"],
                 embeddings=[[0.1, 0.2]],
-                metadatas=[metadata],
+                metadatas=[metadata_value],
             )
-
-            call_args = self.client._executor.call_args
-            executed_sql = call_args[0][0]
+            executed_sql = self.client._executor.call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            self.assertIn("_id", executed_sql)
             self.assertIn(self.collection.id, executed_sql)
+            expected_value_segment = escape_string(
+                json.dumps(metadata_value, ensure_ascii=False)
+            )
+            self.assertIn(expected_value_segment, executed_sql)
 
-            # Verify JSON serialization and SQL escaping
-            # json.dumps handles special chars inside JSON string
-            # escape_string handles the SQL level escaping
-            expected_meta_segment = escape_string(json.dumps(metadata, ensure_ascii=False))
-            self.assertIn(expected_meta_segment, executed_sql)
+            # Test as key: {special_str: "value"}
+            # JSON keys must be strings, so we still need to verify the key is
+            # JSON-serialized and SQL-escaped alongside the document payload.
+            metadata_key = {special_str: "value"}
+            self.client._executor.reset_mock()
+            self.client._collection_add(
+                collection_id=self.collection.id,
+                collection_name=self.collection.name,
+                ids=["id_key"],
+                documents=["doc"],
+                embeddings=[[0.1, 0.2]],
+                metadatas=[metadata_key],
+            )
+            executed_sql = self.client._executor.call_args[0][0]
+            self.assertIn("INSERT INTO", executed_sql)
+            expected_key_segment = escape_string(
+                json.dumps(metadata_key, ensure_ascii=False)
+            )
+            self.assertIn(expected_key_segment, executed_sql)
 
     def test_collection_name_special_characters(self):
         """
