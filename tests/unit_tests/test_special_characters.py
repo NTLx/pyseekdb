@@ -209,9 +209,7 @@ class TestSpecialCharacters(unittest.TestCase):
             executed_sql = self.client._executor.call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
             self.assertIn(self.collection.id, executed_sql)
-            expected_value_segment = escape_string(
-                json.dumps(metadata_value, ensure_ascii=False)
-            )
+            expected_value_segment = escape_string(json.dumps(metadata_value, ensure_ascii=False))
             self.assertIn(expected_value_segment, executed_sql)
 
             # Test as key: {special_str: "value"}
@@ -229,9 +227,7 @@ class TestSpecialCharacters(unittest.TestCase):
             )
             executed_sql = self.client._executor.call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            expected_key_segment = escape_string(
-                json.dumps(metadata_key, ensure_ascii=False)
-            )
+            expected_key_segment = escape_string(json.dumps(metadata_key, ensure_ascii=False))
             self.assertIn(expected_key_segment, executed_sql)
 
     def test_collection_name_special_characters(self):
