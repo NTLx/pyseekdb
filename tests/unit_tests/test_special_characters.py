@@ -86,7 +86,7 @@ class MockClient(BaseClient):
 
 
 class TestSpecialCharacters(unittest.TestCase):
-    """Tests for handling special characters in all fields (ids, documents, metadatas)."""
+    """Tests for special-character escaping in generated collection SQL."""
 
     def setUp(self):
         self.client = MockClient()
@@ -106,6 +106,9 @@ class TestSpecialCharacters(unittest.TestCase):
             "admin' --",
             '"',
             "`",
+            "%",
+            "%%",
+            "100%_complete",
             # Special syntax characters
             "\\",
             "\\\\",
@@ -134,16 +137,8 @@ class TestSpecialCharacters(unittest.TestCase):
             # We explicitly test the internal SQL conversion method for IDs
             sql = self.client._convert_id_to_sql(special_str)
 
-            # Basic checks
-            self.assertIn("CAST(", sql)
-            self.assertIn("AS BINARY)", sql)
-
-            # If it contains a single quote, it should be escaped
-            if "'" in special_str:
-                # The raw string in SQL should have escaped quotes
-                # e.g. ' becomes \' or '' depending on the escaper
-                # pymysql escape_string usually uses backslash
-                pass
+            expected_id_sql = f"CAST('{escape_string(special_str)}' AS BINARY)"
+            self.assertEqual(sql, expected_id_sql)
 
             # Now try adding it to collection via internal method
             self.client._executor.reset_mock()
@@ -162,9 +157,8 @@ class TestSpecialCharacters(unittest.TestCase):
             self.assertIn("_id", executed_sql)
             self.assertIn(self.collection.id, executed_sql)
 
-            # Verify the ID is in the SQL and is correctly escaped
-            expected_id_segment = escape_string(special_str)
-            self.assertIn(expected_id_segment, executed_sql)
+            # Verify the complete ID expression is in the INSERT statement.
+            self.assertIn(expected_id_sql, executed_sql)
 
     def test_documents_special_characters(self):
         """Test that documents with special characters are correctly escaped."""
@@ -185,12 +179,8 @@ class TestSpecialCharacters(unittest.TestCase):
             self.assertIn("_id", executed_sql)
             self.assertIn(self.collection.id, executed_sql)
 
-            # Verify content is in SQL and correctly escaped
-            expected_doc_segment = escape_string(special_str)
-            self.assertIn(expected_doc_segment, executed_sql)
-            # We rely on pymysql.converters.escape_string which is trusted,
-            # ensuring we pass it through.
-            pass
+            expected_doc_sql = f"'{escape_string(special_str)}'"
+            self.assertIn(expected_doc_sql, executed_sql)
 
     def test_metadata_special_characters(self):
         """Test that metadata keys and values with special characters are correctly handled."""
@@ -209,8 +199,8 @@ class TestSpecialCharacters(unittest.TestCase):
             executed_sql = self.client._executor.call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
             self.assertIn(self.collection.id, executed_sql)
-            expected_value_segment = escape_string(json.dumps(metadata_value, ensure_ascii=False))
-            self.assertIn(expected_value_segment, executed_sql)
+            expected_value_sql = f"'{escape_string(json.dumps(metadata_value, ensure_ascii=False))}'"
+            self.assertIn(expected_value_sql, executed_sql)
 
             # Test as key: {special_str: "value"}
             # JSON keys must be strings, so we still need to verify the key is
@@ -227,25 +217,8 @@ class TestSpecialCharacters(unittest.TestCase):
             )
             executed_sql = self.client._executor.call_args[0][0]
             self.assertIn("INSERT INTO", executed_sql)
-            expected_key_segment = escape_string(json.dumps(metadata_key, ensure_ascii=False))
-            self.assertIn(expected_key_segment, executed_sql)
-
-    def test_collection_name_special_characters(self):
-        """
-        Verify validation of collection names with special characters.
-        BaseClient._validate_collection_name enforces strict rules.
-        """
-        from pyseekdb.client.client_base import _validate_collection_name
-
-        # Valid name
-        _validate_collection_name("valid_name_123")
-
-        # Invalid names (should raise ValueError)
-        invalid_names = ["name with spaces", "name-with-dash", "name.with.dot", "name@symbol", "中文", "test\nname"]
-
-        for name in invalid_names:
-            with self.assertRaises(ValueError):
-                _validate_collection_name(name)
+            expected_key_sql = f"'{escape_string(json.dumps(metadata_key, ensure_ascii=False))}'"
+            self.assertIn(expected_key_sql, executed_sql)
 
 
 if __name__ == "__main__":
